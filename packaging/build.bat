@@ -13,7 +13,7 @@ set "VENV=%ROOT%\.venv"
 set "PY=%VENV%\Scripts\python.exe"
 set "PIP=%VENV%\Scripts\pip.exe"
 set "PYINST=%VENV%\Scripts\pyinstaller.exe"
-set "DIST=%ROOT%\dist\WhisperX Transcriber"
+set "DIST=%ROOT%\dist\WhisperXTranscriber"
 
 rem -- Check venv ---------------------------------------------------------------
 if not exist "%PY%" (
@@ -25,7 +25,7 @@ if not exist "%PY%" (
 )
 
 rem -- Install build tools ------------------------------------------------------
-echo   [1/5] Checking build tools...
+echo   [1/4] Checking build tools...
 "%PY%" -c "import PyInstaller" >nul 2>&1
 if errorlevel 1 (
     echo         Installing PyInstaller...
@@ -54,32 +54,53 @@ echo         Done.
 
 rem -- Stage source files into dist ---------------------------------------------
 echo   [3/4] Copying source files into dist...
-copy /Y "%ROOT%\app.py"          "%DIST%\app.py"          >nul
-copy /Y "%ROOT%\transcribe.py"   "%DIST%\transcribe.py"   >nul 2>&1
+copy /Y "%ROOT%\app.py"           "%DIST%\app.py"           >nul
+copy /Y "%ROOT%\setup_wizard.py"  "%DIST%\setup_wizard.py"  >nul
+copy /Y "%ROOT%\transcribe.py"    "%DIST%\transcribe.py"    >nul
+copy /Y "%ROOT%\version.txt"      "%DIST%\version.txt"      >nul
+
+rem Requirements files (used by setup wizard to know what to install)
+copy /Y "%ROOT%\requirements-core.txt" "%DIST%\requirements-core.txt" >nul
+copy /Y "%ROOT%\requirements-cpu.txt"  "%DIST%\requirements-cpu.txt"  >nul
+copy /Y "%ROOT%\requirements-gpu.txt"  "%DIST%\requirements-gpu.txt"  >nul
 
 rem Create empty runtime/ and Models/ placeholder folders
 if not exist "%DIST%\runtime"  mkdir "%DIST%\runtime"
 if not exist "%DIST%\Models"   mkdir "%DIST%\Models"
 
-rem Copy icon into assets/ subdir (used by app.py at runtime)
+rem Copy icon into assets/ subdir
 if exist "%ROOT%\assets\icon.ico" (
     if not exist "%DIST%\assets" mkdir "%DIST%\assets"
     copy /Y "%ROOT%\assets\icon.ico" "%DIST%\assets\icon.ico" >nul
 )
 echo         Done.
 
-rem -- Report size --------------------------------------------------------------
-echo   [4/4] Build summary:
-echo.
-for /f "tokens=*" %%s in ('powershell -NoProfile -Command "(Get-ChildItem -Path '%DIST%' -Recurse -Exclude 'runtime','Models' | Measure-Object -Property Length -Sum).Sum / 1MB" 2^>nul') do (
-    echo         Launcher size (excl. runtime + Models): %%s MB
+rem -- Build Inno Setup installer -----------------------------------------------
+echo   [4/4] Building installer...
+set "ISCC="
+for %%p in (
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    "C:\Program Files\Inno Setup 6\ISCC.exe"
+) do (
+    if exist %%p set "ISCC=%%~p"
 )
-echo         Output: %DIST%\
-echo.
-echo   ============================================================
-echo   Next step: build the Inno Setup installer
-echo     - Open packaging\installer.iss in Inno Setup Compiler
-echo     - Or run:  ISCC packaging\installer.iss
-echo   ============================================================
+
+if defined ISCC (
+    echo         Running Inno Setup...
+    "%ISCC%" "%ROOT%\packaging\installer.iss"
+    if errorlevel 1 (
+        echo   ERROR: Inno Setup build failed.
+        pause
+        exit /b 1
+    )
+    echo.
+    echo   ============================================================
+    echo   Installer ready: dist\installer\WhisperXTranscriber-Setup.exe
+    echo   ============================================================
+) else (
+    echo   WARNING: Inno Setup not found. Skipping installer build.
+    echo   Install from: https://jrsoftware.org/isdl.php
+    echo   Then run: "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
+)
 echo.
 pause
