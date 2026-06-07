@@ -255,20 +255,6 @@ Head to the [**Releases**](../../releases) tab and grab the latest `WhisperXTran
 
 ### 3. Complete the one-time setup
 
-#### First: make sure Python is installed
-
-The setup wizard needs **Python 3.10 or newer** on your PC. If you've never installed Python before, do this before launching the app:
-
-1. Go to **[python.org/downloads](https://www.python.org/downloads/)** and click the big yellow button to download the latest version
-2. Run the installer
-3. **On the very first screen, tick "Add Python to PATH"** — this is the only thing you can get wrong
-4. Click **Install Now** and wait for it to finish
-
-That's it. You never need to open Python or touch it again — it just needs to be there.
-
-> **Already launched the app and saw a red "Python not found" warning?**  
-> Close the app, re-run the Python installer with the PATH option ticked, then relaunch.
-
 <table>
   <tr>
     <td align="center">
@@ -282,7 +268,11 @@ That's it. You never need to open Python or touch it again — it just needs to 
   </tr>
 </table>
 
-Once Python is installed, launch the app — the **Setup Wizard** opens automatically and downloads the AI engine (1–3 GB). This is a one-time step. Every launch after this opens instantly.
+On first launch, the **Setup Wizard** opens and handles everything — including Python if it's not already on your machine. Just click **"Install Python automatically"** and the wizard downloads and installs it for you with the right settings. No manual steps needed.
+
+Once Python is ready, the wizard downloads the AI engine (1–3 GB). This is a one-time step. Every launch after this opens instantly.
+
+> Prefer to install Python yourself? Get it from [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen.
 
 ### 4. Start transcribing
 
@@ -340,7 +330,7 @@ You can select multiple formats at once — all files save to the same folder.
 ### Troubleshooting
 
 **"Python not found" / red warning in the setup wizard**  
-You need to install Python before the wizard can run. Go to [python.org/downloads](https://www.python.org/downloads/), download the latest version, run the installer, and **tick "Add Python to PATH"** on the first screen. Then relaunch the app.
+Click **"Install Python automatically"** — the wizard will download and install it for you. If you prefer to do it manually, go to [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen, then click "Check again" in the wizard.
 
 **Setup stops or fails mid-download**  
 Click **Retry** — the wizard picks up where it left off and skips packages that are already installed.

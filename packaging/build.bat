@@ -20,7 +20,7 @@ if not exist "%PY%" (
     echo   ERROR: .venv not found at %VENV%
     echo   Run run.bat once to create the environment, then re-run this script.
     echo.
-    pause
+    exit /b 1
     exit /b 1
 )
 
@@ -46,7 +46,7 @@ echo.
 if errorlevel 1 (
     echo.
     echo   ERROR: PyInstaller build failed.
-    pause
+    exit /b 1
     exit /b 1
 )
 echo.
@@ -83,7 +83,7 @@ if exist "%ZIP%" del /f "%ZIP%"
 "%PY%" -c "import zipfile,pathlib; src=pathlib.Path(r'%DIST%'); out=pathlib.Path(r'%ZIP%'); zf=zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=6); [zf.write(f,f.relative_to(src)) for f in src.rglob('*') if f.is_file()]; zf.close(); print(f'  Packed {sum(1 for _ in src.rglob(chr(42)) if _.is_file())} files -> {out.stat().st_size//1048576} MB')"
 if errorlevel 1 (
     echo   ERROR: Zip creation failed.
-    pause
+    exit /b 1
     exit /b 1
 )
 
@@ -92,4 +92,3 @@ echo   ============================================================
 echo   Release zip ready: dist\release\WhisperXTranscriber.zip
 echo   ============================================================
 echo.
-pause

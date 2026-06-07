@@ -10,9 +10,14 @@ import sys
 import queue
 import shutil
 import subprocess
+import tempfile
 import threading
+import urllib.request
 import webbrowser
 import customtkinter as ctk
+
+_PYTHON_VERSION   = "3.13.7"
+_PYTHON_URL       = f"https://www.python.org/ftp/python/{_PYTHON_VERSION}/python-{_PYTHON_VERSION}-amd64.exe"
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -72,10 +77,17 @@ def _cuda_torch_index() -> str | None:
         return None
 
 
+def _py_version_ok(version_output: str) -> bool:
+    """Return True if version string is Python 3.10 or newer."""
+    import re
+    m = re.search(r"Python 3\.(\d+)", version_output)
+    return bool(m and int(m.group(1)) >= 10)
+
+
 def _find_python() -> str | None:
     """Return path to system Python 3.10+, or None."""
-    candidates = ["python", "python3", "python3.13", "python3.12",
-                  "python3.11", "python3.10"]
+    candidates = ["python", "python3", "python3.14", "python3.13",
+                  "python3.12", "python3.11", "python3.10"]
     for cmd in candidates:
         path = shutil.which(cmd)
         if not path:
@@ -83,10 +95,45 @@ def _find_python() -> str | None:
         try:
             r = subprocess.run([path, "--version"], capture_output=True,
                                text=True, timeout=5)
-            out = (r.stdout + r.stderr).strip()
-            for minor in ["3.10", "3.11", "3.12", "3.13"]:
-                if minor in out:
-                    return path
+            if _py_version_ok(r.stdout + r.stderr):
+                return path
+        except Exception:
+            continue
+    return None
+
+
+def _find_python_fresh() -> str | None:
+    """Like _find_python() but also searches well-known install locations.
+
+    shutil.which() reads os.environ['PATH'] which is a snapshot from process
+    start — it won't see Python installed after this process launched.  This
+    function falls back to globbing the standard Windows install directories so
+    'Check again' works without requiring the user to restart the app.
+    """
+    result = _find_python()
+    if result:
+        return result
+
+    import glob
+    local_app   = os.environ.get("LOCALAPPDATA", "")
+    prog_files  = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+    patterns = [
+        os.path.join(local_app,  "Programs", "Python", "Python3*", "python.exe"),
+        os.path.join(prog_files, "Python3*", "python.exe"),
+        r"C:\Python3*\python.exe",
+    ]
+    candidates = []
+    for pat in patterns:
+        candidates.extend(glob.glob(pat))
+
+    for path in sorted(candidates, reverse=True):  # newest version first
+        try:
+            r = subprocess.run(
+                [path, "--version"], capture_output=True, text=True,
+                timeout=5, creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            if _py_version_ok(r.stdout + r.stderr):
+                return path
         except Exception:
             continue
     return None
@@ -200,7 +247,7 @@ class SetupWizard:
 
         if not self.python_path:
             ctk.CTkLabel(pcard,
-                         text="Install Python 3.10+ from python.org — tick 'Add Python to PATH'",
+                         text="Install Python 3.10+ from python.org — tick 'Add Python to PATH', then click 'Check again'",
                          font=_F(10), text_color=_HINT,
                          ).grid(row=1, column=0, padx=16, pady=(0, 10), sticky="w")
 
@@ -211,12 +258,127 @@ class SetupWizard:
                           command=self._start_install,
                           ).grid(row=0, column=0, pady=13, padx=18, sticky="e")
         else:
-            ctk.CTkButton(self.ftr, text="Download Python →", width=180, height=40,
-                          font=_F(13), fg_color="#4a9eff", hover_color="#6ab0ff",
-                          command=lambda: webbrowser.open(
-                              "https://www.python.org/downloads/"),
-                          ).grid(row=0, column=0, pady=13, padx=18, sticky="e")
+            self.ftr.grid_columnconfigure(0, weight=1)
+            ctk.CTkButton(self.ftr, text="Check again", width=130, height=40,
+                          font=_F(12), fg_color=("#d0d0d0", "#2a2a2a"),
+                          hover_color=("#c0c0c0", "#3a3a3a"), text_color=_PRI,
+                          command=self._check_python_again,
+                          ).grid(row=0, column=1, pady=13, padx=(0, 8))
+            ctk.CTkButton(self.ftr, text="Install Python automatically", width=220, height=40,
+                          font=_F(13, "bold"), fg_color="#4a9eff", hover_color="#6ab0ff",
+                          command=self._auto_install_python,
+                          ).grid(row=0, column=2, pady=13, padx=(0, 18))
 
+
+    def _check_python_again(self):
+        self.python_path = _find_python_fresh()
+        self._show_welcome()
+
+    # ── Auto Python install ───────────────────────────────────────────────────
+
+    def _auto_install_python(self):
+        self._show_python_installing()
+        threading.Thread(target=self._run_python_install, daemon=True).start()
+
+    def _show_python_installing(self):
+        self._clear(self.body)
+        self._clear(self.ftr)
+        b = self.body
+
+        ctk.CTkLabel(b, text="Installing Python...", font=_F(22, "bold"),
+                     text_color=_PRI).grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+        self._py_status_var = ctk.StringVar(value=f"Downloading Python {_PYTHON_VERSION}...")
+        ctk.CTkLabel(b, textvariable=self._py_status_var, font=_F(12),
+                     text_color=_DIM).grid(row=1, column=0, sticky="w", pady=(0, 10))
+
+        prog_row = ctk.CTkFrame(b, fg_color="transparent")
+        prog_row.grid(row=2, column=0, sticky="ew")
+        prog_row.grid_columnconfigure(0, weight=1)
+
+        self._py_prog = ctk.CTkProgressBar(prog_row, height=8, corner_radius=4,
+                                            fg_color=("#d0d0d0", "#1a1a1a"),
+                                            progress_color="#4a9eff")
+        self._py_prog.set(0)
+        self._py_prog.grid(row=0, column=0, sticky="ew")
+
+        self._py_pct = ctk.CTkLabel(prog_row, text="0%", font=_F(10),
+                                     text_color=_HINT, width=36)
+        self._py_pct.grid(row=0, column=1, padx=(8, 0))
+
+        ctk.CTkLabel(self.ftr,
+                     text="Python is being downloaded and installed — this takes about a minute.",
+                     font=_F(11), text_color=_HINT,
+                     ).grid(row=0, column=0, pady=18, padx=18)
+
+    def _set_py_status(self, msg: str):
+        if hasattr(self, "_py_status_var"):
+            self.win.after(0, lambda: self._py_status_var.set(msg))
+
+    def _set_py_progress(self, value: float):
+        def _do():
+            if hasattr(self, "_py_prog"):
+                self._py_prog.set(max(0.0, min(1.0, value)))
+            if hasattr(self, "_py_pct"):
+                self._py_pct.configure(text=f"{int(value * 100)}%")
+        self.win.after(0, _do)
+
+    def _run_python_install(self):
+        import time
+        try:
+            tmp = os.path.join(tempfile.gettempdir(), f"python-{_PYTHON_VERSION}-installer.exe")
+
+            # Download
+            def _progress(count, block_size, total):
+                if total > 0:
+                    self._set_py_progress(min(count * block_size / total, 0.95))
+
+            urllib.request.urlretrieve(_PYTHON_URL, tmp, _progress)
+            self._set_py_progress(1.0)
+
+            # Run installer — InstallAllUsers=0 keeps it per-user (no UAC needed)
+            self._set_py_status("Installing Python — please wait...")
+            result = subprocess.run(
+                [tmp, "/passive", "PrependPath=1", "Include_test=0",
+                 "SimpleInstall=1", "InstallAllUsers=0"],
+                timeout=300,
+            )
+            # 1638 = already installed (also fine)
+            if result.returncode not in (0, 1638):
+                raise RuntimeError(f"Installer exited with code {result.returncode}.")
+
+            # Retry a few times — installer may not have flushed to disk yet
+            self._set_py_status("Verifying installation...")
+            for _ in range(6):
+                self.python_path = _find_python_fresh()
+                if self.python_path:
+                    break
+                time.sleep(2)
+
+            if self.python_path:
+                self._set_py_status("Python installed successfully!")
+                self.win.after(800, self._show_welcome)
+            else:
+                raise RuntimeError("Python was installed — please restart the app to continue.")
+
+        except Exception as exc:
+            self._set_py_status(f"Failed: {exc}")
+            self.win.after(0, lambda: self._show_py_error(str(exc)))
+
+    def _show_py_error(self, msg: str):
+        self._clear(self.ftr)
+        self.ftr.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(self.ftr, text=msg[:80], font=_F(10), text_color="#ff4d4d",
+                     wraplength=400).grid(row=0, column=0, pady=8, padx=18, sticky="w")
+        ctk.CTkButton(self.ftr, text="Try again", width=100, height=36,
+                      font=_F(12), fg_color=("#d0d0d0", "#2a2a2a"),
+                      hover_color=("#c0c0c0", "#3a3a3a"), text_color=_PRI,
+                      command=self._show_welcome,
+                      ).grid(row=0, column=1, pady=8, padx=(0, 8))
+        ctk.CTkButton(self.ftr, text="Install manually →", width=150, height=36,
+                      font=_F(12), fg_color="#4a9eff", hover_color="#6ab0ff",
+                      command=lambda: webbrowser.open("https://www.python.org/downloads/"),
+                      ).grid(row=0, column=2, pady=8, padx=(0, 18))
 
     # ── Page 2: Installing ────────────────────────────────────────────────────
 
@@ -493,6 +655,7 @@ class SetupWizard:
                       ).grid(row=0, column=1, pady=10, padx=(0, 18))
 
     def _retry(self):
+        self.python_path = _find_python_fresh()
         self._show_welcome()
 
     def _finish(self):
