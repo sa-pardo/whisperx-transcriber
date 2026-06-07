@@ -19,37 +19,39 @@ Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](htt
 ## Quick Access
 
 **Is this for me?**
-[Why use this?](#why-use-this) · [What it does](#what-it-does) · [Supported languages](#supported-languages) · [Who is this for?](#who-is-this-for) · [Sample output](#sample-output)
+[Why use this?](#why-use-this) · [What you can do with it](#what-you-can-do-with-it) · [Supported languages](#supported-languages) · [Who is this for?](#who-is-this-for) · [See it in action](#see-it-in-action)
 
 **Get Started**
-[Download & install](#for-end-users) · [First-time setup](#step-3--first-launch-one-time-setup) · [CPU vs GPU](#cpu-vs-gpu) · [How to transcribe](#step-4--transcribe)
+[Download & install](#get-started) · [First-time setup](#3-complete-the-one-time-setup) · [CPU vs GPU](#cpu-vs-gpu) · [How to transcribe](#4-start-transcribing)
 
 **Using the App**
-[Interface overview](#interface) · [Models](#models) · [Output formats](#output-formats) · [Troubleshooting](#troubleshooting)
+[What the app looks like](#what-the-app-looks-like) · [Choosing a model](#choosing-a-model) · [Output formats](#output-formats) · [Troubleshooting](#troubleshooting)
 
 **Build & Hack**
-[Quick start](#quick-start) · [Project structure](#project-structure) · [Architecture](#architecture--thin-launcher-pattern) · [CLI usage](#cli-usage) · [Build release zip](#building-the-release-zip)
+[Quick start](#quick-start) · [Project structure](#project-structure) · [How it works](#how-it-works-under-the-hood) · [CLI usage](#command-line-usage) · [Package a release](#package-a-release)
 
 **Community & Support**
-[What's coming](#roadmap) · [Support the project](#support-the-project) · [Contribute](#contributing) · [Tech stack](#tech-stack) · [License](#license)
+[What's coming](#whats-coming) · [Support the project](#support-the-project) · [Help build it](#help-build-it) · [What it's built on](#what-its-built-on) · [License](#license)
 
 ---
 
 ## Why use this?
 
-Most transcription tools are either expensive cloud services that send your audio to someone else's server, or complex Python scripts that require technical setup. WhisperX Transcriber is neither.
+Most transcription tools are either expensive cloud services that upload your audio to a remote server, or complex Python scripts that require technical setup. WhisperX Transcriber is neither.
 
 - **Your audio never leaves your machine.** Everything runs locally — no cloud, no API key, no subscription.
-- **One-time setup, then works forever offline.** The AI engine downloads once (~1–3 GB). After that, you never need the internet again.
-- **No terminal, no Python knowledge required** for end users. Extract the zip, run the exe, click through a one-time setup wizard. Done.
-- **Fast.** On a modern NVIDIA GPU, it transcribes faster than realtime. Even on CPU it's practical for short and medium recordings.
-- **Accurate.** Powered by OpenAI's Whisper large-v2 model — one of the best open-source speech recognition models available.
-- **Word-level timestamps.** Every word is timestamped precisely, not just sentence segments. Essential for subtitle work, content search, and downstream processing.
-- **Open source and auditable.** The full source code is public. You can see exactly what the app does — no telemetry, no hidden network calls, no surprises.
+- **One-time setup, then works forever offline.** The AI engine downloads once (~1–3 GB). After that, no internet needed — ever.
+- **No terminal, no Python knowledge required.** Extract the zip, run the exe, click through a one-time setup wizard. Done.
+- **Fast.** On a modern NVIDIA GPU, it transcribes faster than realtime. On CPU it's still practical for short and medium recordings.
+- **Accurate.** Powered by OpenAI's Whisper large-v2 — one of the best open-source speech recognition models available.
+- **Word-level timestamps.** Every word is timed precisely, not just sentence segments — essential for subtitles, content search, and editing.
+- **Fully open source.** No telemetry, no tracking, no surprises. Every line of code is readable in this repo.
 
 ---
 
-## Interface
+## What the app looks like
+
+Four clean panels — everything is a click away, nothing is buried.
 
 <table>
   <tr>
@@ -76,19 +78,19 @@ Most transcription tools are either expensive cloud services that send your audi
 
 ---
 
-## What it does
+## What you can do with it
 
 - Transcribes **audio and video files** to text with word-level timestamps
 - Exports to **SRT, VTT, TXT, TSV, JSON**, or a custom **Word JSON** format
 - Supports **20 languages** in the GUI, **99 languages** via the CLI
-- Auto-detects your **NVIDIA GPU** for fast transcription, falls back to CPU automatically
-- Strips silence automatically with a built-in **VAD (Voice Activity Detection)** filter
-- Produces **karaoke-style highlighted subtitles** (word-by-word highlighting in SRT/VTT)
+- Auto-detects your **NVIDIA GPU** and uses CUDA — falls back to CPU automatically
+- Strips silence with a built-in **Voice Activity Detection (VAD)** filter
+- Produces **karaoke-style subtitles** with word-by-word highlighting in SRT/VTT
 - Runs **100% offline** after the one-time first-run setup
 
 ---
 
-## Sample output
+## See it in action
 
 ### English — "The quick brown fox…"
 
@@ -96,12 +98,12 @@ Most transcription tools are either expensive cloud services that send your audi
 
 Transcribed with `large-v2`, word timestamps enabled:
 
-**TXT**
+**Plain text**
 ```
 The quick brown fox jumps over the lazy dog.
 ```
 
-**SRT** *(word-level, every word precisely timed)*
+**SRT — word-level, every word precisely timed**
 ```srt
 1
 00:00:00,000 --> 00:00:00,480
@@ -140,7 +142,7 @@ lazy
 dog.
 ```
 
-**Word-level JSON** *(per-word confidence scores)*
+**Word JSON — per-word confidence scores**
 ```json
 [
   { "word": "The",   "start": 0.00, "end": 0.48, "score": 0.99 },
@@ -159,9 +161,9 @@ dog.
 
 ### Urdu — السلام علیکم
 
-Auto-detected language: `ur` (Urdu). Whisper handles right-to-left scripts natively — no special configuration needed.
+Language auto-detected as `ur`. Right-to-left scripts work natively — no special setup needed.
 
-**TXT**
+**Plain text**
 ```
 السلام علیکم کیا حال ہے؟ امید ہے آپ سب خیریت سے ہوں گے
 ```
@@ -184,28 +186,28 @@ start	end	text
 2640	5380	امید ہے آپ سب خیریت سے ہوں گے
 ```
 
-> Urdu, Arabic, Persian, and Pashto all work out of the box. The model reads right-to-left text naturally — no post-processing or font configuration required.
+> Urdu, Arabic, Persian, and Pashto all work out of the box. The model reads right-to-left text naturally — no post-processing or font tweaks required.
 
 ---
 
-## One-time download — works offline forever
+## Download once, use forever
 
-The app is designed around a simple idea: **download once, use forever**.
+The app is built around one principle: **pay the download cost once, use it forever**.
 
 ```
-First launch (internet required, one time only)
-  └── Setup Wizard downloads the AI engine: torch + whisperX (~1–3 GB)
-      └── Saved to runtime/ folder next to the app
-          └── Every launch after this: no internet needed, opens instantly
+First launch  (internet required — one time only)
+  └── Setup Wizard installs the AI engine: torch + whisperX  (~1–3 GB)
+      └── Saved to the runtime/ folder next to the app
+          └── Every launch after this: fully offline, opens instantly
 ```
 
-The AI **models** (e.g. large-v2) also download once on first use and are cached locally. After that, transcription works with zero internet connection — even on a plane.
+AI models (e.g. large-v2) are also cached on first use and never re-downloaded. Transcription works with no internet connection at all after that — even on a plane.
 
 ---
 
 ## Supported languages
 
-The GUI exposes **20 languages** with a dropdown:
+**20 languages** are available in the dropdown, with **Auto-detect** as the default:
 
 | Language | Code | Language | Code |
 |---|---|---|---|
@@ -220,133 +222,155 @@ The GUI exposes **20 languages** with a dropdown:
 | Hindi | `hi` | Georgian | `ka` |
 | Pashto | `ps` | | |
 
-The **Auto-detect** option lets Whisper identify the language automatically. The underlying model supports **99 languages** — all accessible via the CLI.
+The underlying Whisper model supports **99 languages** in total — all accessible via the CLI using any ISO 639-1 code.
 
 ---
 
 ## Who is this for?
 
-- **Journalists and researchers** — transcribe interviews and lectures quickly, with accurate timestamps
+- **Journalists and researchers** — transcribe interviews and lectures with accurate timestamps
 - **Content creators** — generate subtitles for videos in minutes instead of hours
-- **Translators** — get a timestamped base transcript before translating
-- **Students** — transcribe lectures, seminars, and recorded classes
-- **Anyone who handles audio in Arabic, Urdu, Persian, or other non-Latin-script languages** — Whisper handles right-to-left scripts natively
+- **Translators** — get a clean, timestamped base transcript before you start
+- **Students** — transcribe lectures, seminars, and recorded classes offline
+- **Anyone working with Arabic, Urdu, Persian, Pashto, or other RTL languages** — full native support
 - **Privacy-conscious users** — nothing is uploaded anywhere, ever
 
 ---
 
 ---
 
-# For End Users
+# Get Started
 
-> No terminal, no technical knowledge required.
+> No terminal, no Python knowledge required. Just download, extract, and run.
 
-### Step 1 — Download
+### 1. Download the app
 
-Go to the [**Releases**](../../releases) tab and download `WhisperXTranscriber.zip` (~19 MB).
+Head to the [**Releases**](../../releases) tab and grab the latest `WhisperXTranscriber.zip` — it's about 19 MB.
 
-### Step 2 — Extract and run
+### 2. Extract and launch
 
-- Extract the zip anywhere (e.g. `C:\Apps\WhisperXTranscriber\`)
+- Unzip anywhere you like — `C:\Apps\WhisperXTranscriber\` works great
 - Double-click `WhisperXTranscriber.exe`
-- **No installer, no admin rights required** — fully portable
+- **No installer, no admin rights needed** — it's fully portable
 
-### Step 3 — First launch (one-time setup)
+### 3. Complete the one-time setup
+
+#### First: make sure Python is installed
+
+The setup wizard needs **Python 3.10 or newer** on your PC. If you've never installed Python before, do this before launching the app:
+
+1. Go to **[python.org/downloads](https://www.python.org/downloads/)** and click the big yellow button to download the latest version
+2. Run the installer
+3. **On the very first screen, tick "Add Python to PATH"** — this is the only thing you can get wrong
+4. Click **Install Now** and wait for it to finish
+
+That's it. You never need to open Python or touch it again — it just needs to be there.
+
+> **Already launched the app and saw a red "Python not found" warning?**  
+> Close the app, re-run the Python installer with the PATH option ticked, then relaunch.
 
 <table>
   <tr>
     <td align="center">
       <img src="assets/screenshots/First_Time_Setup.png" width="360" alt="Setup wizard welcome screen"/><br/>
-      <sub>GPU auto-detected — CUDA build selected automatically</sub>
+      <sub>Your GPU is detected automatically — the right CUDA build is selected for you</sub>
     </td>
     <td align="center">
       <img src="assets/screenshots/Setup_Ongoing.png" width="360" alt="Setup wizard installing"/><br/>
-      <sub>torch + WhisperX downloading — only happens once</sub>
+      <sub>torch + WhisperX are downloading — this only ever happens once</sub>
     </td>
   </tr>
 </table>
 
-On first launch, the **Setup Wizard** opens automatically and walks you through a one-time download of the AI engine (1–3 GB). Every future launch opens instantly with no setup.
+Once Python is installed, launch the app — the **Setup Wizard** opens automatically and downloads the AI engine (1–3 GB). This is a one-time step. Every launch after this opens instantly.
 
-> **Python 3.10+ is required** for the setup wizard.  
-> Install from [python.org](https://www.python.org/downloads/) and tick **"Add Python to PATH"**.  
-> After setup, Python runs entirely in the background — you never need to touch it again.
+### 4. Start transcribing
 
-### Step 4 — Transcribe
-
-1. Click **Transcribe** and select your audio or video file
-2. Go to **Quality** to choose model size and device
-3. Go to **Save** to choose your export formats
-4. Click **Transcribe**
+1. Click **Transcribe** in the sidebar and select your audio or video file
+2. Go to **Quality** to pick your model and device
+3. Go to **Save** to choose which formats you want to export
+4. Hit **Transcribe** — the Activity panel shows you what's happening in real time
 
 ---
 
 ### CPU vs GPU
 
-| | CPU | GPU |
+| | CPU | GPU (NVIDIA) |
 |---|---|---|
 | Setup download | ~1 GB | ~2–3 GB |
 | Transcription speed | ~0.3–0.5× realtime | ~8–15× realtime |
-| Hardware required | Any Windows PC | NVIDIA GPU + driver 525+ |
+| Hardware needed | Any Windows PC | NVIDIA GPU + driver 525+ |
 
-The wizard detects your GPU automatically. You can override the device in the **Quality** panel.
+The wizard detects your GPU automatically. You can override the device any time in the **Quality** panel.
 
 ---
 
-### Models
+### Choosing a model
 
-| Model | Download size | Best for |
+Models download on first use and are cached — you never re-download them.
+
+| Model | Size | Best for |
 |---|---|---|
-| `tiny` | ~75 MB | Quick preview, low accuracy |
-| `base` | ~145 MB | Fast drafts |
-| `small` | ~465 MB | Good balance of speed and accuracy |
+| `tiny` | ~75 MB | Quick test, low accuracy |
+| `base` | ~145 MB | Fast rough drafts |
+| `small` | ~465 MB | Good balance of speed and quality |
 | `medium` | ~1.5 GB | High accuracy |
-| `large-v2` *(default)* | ~3 GB | Best quality, recommended |
-| `large-v3` | ~3 GB | Latest version of large |
+| `large-v2` *(default)* | ~3 GB | Best quality — start here |
+| `large-v3` | ~3 GB | Newest large model |
+
+Not sure which to pick? Start with `large-v2`. Drop down to `small` if you need speed or have limited disk space.
 
 ---
 
 ### Output formats
 
-| Format | Description |
+| Format | What you get |
 |---|---|
-| `word_json` | Per-word `{word, start, end, score}` — for developers and downstream tools |
-| `srt` | Standard subtitles — works in VLC, YouTube, Premiere, DaVinci Resolve |
-| `vtt` | WebVTT subtitles — for web video players |
-| `txt` | Plain text transcript — no timestamps |
-| `tsv` | Tab-separated with start/end timestamps per segment |
-| `json` | Full segment-level JSON with all metadata |
+| `SRT` | Standard subtitles — drag into VLC, YouTube, Premiere, DaVinci Resolve |
+| `VTT` | WebVTT subtitles — for web video players and browsers |
+| `TXT` | Clean plain text — no timestamps, just the words |
+| `TSV` | Tab-separated — start/end times per segment, easy to open in Excel |
+| `JSON` | Full segment-level data with all metadata |
+| `Word JSON` | Per-word `{word, start, end, score}` — for developers and pipelines |
+
+You can select multiple formats at once — all files save to the same folder.
 
 ---
 
 ### Troubleshooting
 
-**"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH". Then re-run the app.
+**"Python not found" / red warning in the setup wizard**  
+You need to install Python before the wizard can run. Go to [python.org/downloads](https://www.python.org/downloads/), download the latest version, run the installer, and **tick "Add Python to PATH"** on the first screen. Then relaunch the app.
 
-**Setup fails mid-download** — Click **Retry**. The wizard resumes and skips already-installed packages.
+**Setup stops or fails mid-download**  
+Click **Retry** — the wizard picks up where it left off and skips packages that are already installed.
 
-**CUDA out of memory** — Lower Batch Size in the Quality panel. Try 8, then 4.
+**"CUDA out of memory" during transcription**  
+Go to **Quality** and lower the Speed (batch size) value. Try 8, then 4.
 
-**Alignment fails** — Disable word timestamps in the Save panel. SRT, VTT, and TXT still export without them.
+**Word alignment failed**  
+Turn off **Word timestamps** in the Save panel. SRT, VTT, and TXT still export without word-level timing.
 
-**Transcription is slow on CPU** — Use a smaller model (`small` or `base`).
+**Transcription is very slow**  
+Switch to a smaller model (`small` or `base`) in the Quality panel.
 
-**Anything else** — Open a [GitHub issue](../../issues) and paste the Activity log output.
+**Something else is wrong**  
+Open a [GitHub issue](../../issues) and paste the output from the **Activity** panel — that's the fastest way to get help.
 
 ---
 
 ---
 
-# For Developers
+# Build & Hack
 
-> Clone, run one script, and you're in.
+> Clone the repo, run one command, and you're developing.
 
-### Requirements
+### What you need
 
 - Python 3.10, 3.11, 3.12, or 3.13
 - Git
-- Windows (macOS support planned — see roadmap)
-- NVIDIA GPU recommended but not required
+- Windows *(macOS support is on the roadmap)*
+- An NVIDIA GPU is helpful but not required
 
 ### Quick start
 
@@ -356,29 +380,29 @@ cd whisperx-transcriber
 run.bat
 ```
 
-`run.bat` creates a `.venv`, installs the correct PyTorch build for your GPU, installs WhisperX and all UI dependencies, and launches the app. Every subsequent run opens instantly.
+`run.bat` handles everything on first run: creates a `.venv`, detects your GPU, installs the right PyTorch build, installs WhisperX and the UI dependencies, then launches the app. Every run after the first opens instantly.
 
 ### Project structure
 
 ```
 whisperx-transcriber/
 │
-├── app.py                  Main GUI application
-├── launcher.py             Thin entry point used by the packaged .exe
-├── setup_wizard.py         First-run wizard (frozen inside the .exe)
-├── transcribe.py           Headless CLI for scripting and batch use
+├── app.py                  Main GUI — the entire interface (~1000 lines)
+├── launcher.py             Thin .exe entry point — checks setup, spawns app
+├── setup_wizard.py         First-run wizard, frozen inside the .exe
+├── transcribe.py           Headless CLI for scripting and batch work
 │
 ├── core/
-│   └── pipeline.py         All WhisperX pipeline logic — no GUI dependencies
+│   └── pipeline.py         All AI/WhisperX logic — zero GUI dependencies
 │
-├── run.bat                 Windows developer launcher
+├── run.bat                 Developer launcher for Windows
 │
 ├── packaging/
-│   ├── build.bat           Builds the thin launcher exe + portable zip
+│   ├── build.bat           Builds the .exe and packages the portable zip
 │   └── launcher.spec       PyInstaller spec — GUI only, no ML packages
 │
 ├── tests/
-│   └── test_pipeline.py    Unit + WER tests for core pipeline
+│   └── test_pipeline.py    Unit + WER tests for the core pipeline
 │
 └── assets/
     ├── icon.ico
@@ -386,63 +410,81 @@ whisperx-transcriber/
     └── samples/            Sample audio files
 ```
 
-### Architecture — thin launcher pattern
+### How it works under the hood
+
+The distributed `.exe` is intentionally tiny (~19 MB) — it contains **no AI packages whatsoever**:
 
 ```
-WhisperXTranscriber.exe  (PyInstaller onedir, ~19 MB)
-  └── Python runtime + customtkinter + Pillow  (GUI only)
-  └── setup_wizard (frozen inside)
-      └── On first run: pip-installs whisperx + torch into runtime/
-          └── On all later runs: spawns runtime/python app.py
+WhisperXTranscriber.exe  (PyInstaller onedir)
+  └── Python runtime + customtkinter + Pillow  (GUI shell only)
+  └── setup_wizard  (frozen inside the exe)
+      └── First run  →  pip-installs torch + whisperx into runtime/
+          └── All later runs  →  spawns runtime/python.exe app.py
 ```
 
-This keeps the distributable tiny and means AI engine updates don't require re-downloading the whole app.
+This means the distributable stays small and AI engine updates don't require users to re-download the whole app.
 
-### Building the release zip
+### Package a release
 
 ```bash
-packaging\build.bat   # requires .venv (run run.bat once first)
-# Output: dist/release/WhisperXTranscriber.zip
+# Requires .venv — run run.bat once first
+packaging\build.bat
+
+# Output
+dist/release/WhisperXTranscriber.zip
 ```
 
-### CLI usage
+### Command-line usage
+
+For scripting, batch processing, or accessing all 99 supported languages:
 
 ```bash
+# Basic usage
 python transcribe.py audio.mp3
+
+# With options
 python transcribe.py audio.mp3 --language ur --model large-v2
-python transcribe.py audio.mp3 --device cpu --output srt vtt
+python transcribe.py audio.mp3 --device cpu --output srt vtt txt
 python transcribe.py audio.mp3 --model-dir D:\models
 ```
 
----
+| Option | Values | Default |
+|---|---|---|
+| `--model` | `tiny` `base` `small` `medium` `large-v2` `large-v3` | `large-v2` |
+| `--language` | Any ISO 639-1 code (`en`, `ar`, `ur`, `fa` …) | auto-detect |
+| `--device` | `cuda` `cpu` | auto-detect |
+| `--output` | `srt` `vtt` `txt` `tsv` `json` `word_json` | `word_json` |
+| `--model-dir` | Path to model cache folder | `./Models` |
 
 ---
 
-## Roadmap
+---
 
-This project is built and maintained by a single developer — a working student engineer and part-time researcher. Development happens in spare time, but the vision is clear. Here's where it's going:
+## What's Coming
 
-### Coming next
+This project is built and maintained by a single developer — a working student engineer doing part-time research. Development happens in spare time, but the vision is clear and the roadmap is real.
+
+### Up next
 
 - **Cancel button** — stop a transcription mid-run without closing the app
-- **Real progress tracking** — percentage-based progress instead of indeterminate animation
-- **macOS `.app` bundle** — portable build for Mac, same thin-launcher pattern
+- **Real progress tracking** — show percentage complete instead of an indeterminate bar
+- **macOS `.app` bundle** — a proper portable build for Mac, same thin-launcher pattern
 
-### Planned features
+### On the roadmap
 
-- **Drag-and-drop** file input directly onto the window
-- **Batch folder transcription** — drop a folder, transcribe everything as a queue
-- **Speaker diarization** — identify who said what, with per-speaker labels in the output
+- **Drag-and-drop** — drop audio or video files directly onto the window
+- **Batch transcription** — drop a folder, process everything as a queue
+- **Speaker diarization** — who said what, with per-speaker labels in the output
 - **Translation mode** — transcribe and translate to English in one pass
-- **Custom vocabulary** — prime the model with domain-specific terms for better accuracy
-- **Auto-update check** — get notified when a new version is available
+- **Custom vocabulary** — give the model domain-specific terms for better accuracy
+- **Auto-update notifications** — know when a new version is available
 
-### Longer term
+### The bigger picture
 
-- **Linux AppImage** — after macOS is stable
-- **Local crash logs** — rotating log file so errors are never silently lost
+- **Linux AppImage** — after macOS is solid
+- **Local error logs** — rotating crash log so nothing fails silently again
 
-> If any of these matter to you, the fastest way to make them happen is to [support the project](#support-the-project) or open an issue describing your use case.
+> Have a feature you really want? The fastest way to make it happen is to [support the project](#support-the-project) or open an issue describing your use case.
 
 ---
 
@@ -460,40 +502,42 @@ I'm a working student engineer doing part-time research, building this entirely 
   </a>
 </p>
 
-### Sponsorship tiers
+### Pick your level
 
 | Tier | Amount | What it means |
 |---|---|---|
-| ☕ **A coffee** | $3 / month | Keeps me caffeinated during late-night coding sessions |
+| ☕ **A coffee** | $3 / month | Keeps me caffeinated through late-night coding sessions |
 | 🍕 **A slice** | $10 / month | Covers tools, storage, and GPU time for testing |
-| 📚 **A textbook** | $25 / month | Directly offsets research and coursework costs so I can spend more time on this |
-| 🚀 **A booster** | $50 / month | Priority feature requests — tell me what you need built next |
+| 📚 **A textbook** | $25 / month | Offsets research and coursework costs so I can spend more time building |
+| 🚀 **A booster** | $50 / month | Priority feature requests — you tell me what to build next |
 
-> **One-time donation?** Any amount via [PayPal](https://www.paypal.me/mibrahimqr) is equally appreciated. There's no minimum — even $1 is a genuine signal that this work matters.
+> **Prefer a one-time contribution?** Any amount via [PayPal](https://www.paypal.me/mibrahimqr) is just as appreciated — there's no minimum. Even $1 is a genuine signal that this work matters.
 
-### Other ways to help
+### Not ready to donate? No worries.
 
-- **★ Star the repo** — free, takes two seconds, massively helps discoverability  
-- **Share it** — tell a colleague, post in a community, recommend it to someone who needs it  
-- **Open an issue** — bug reports and feature requests are contributions too
+There are other ways to help that cost nothing:
 
-Every bit of support — financial or otherwise — directly translates to more development time and faster feature delivery.
+- **★ Star the repo** — takes two seconds, makes the project easier to find
+- **Share it** — tell a colleague, post in a community, or recommend it to someone who'd find it useful
+- **Report a bug or request a feature** — a good issue is a real contribution
+
+Every bit of support — financial or otherwise — directly translates to more time building features and fixing bugs.
 
 ---
 
-## Free and open source
+## Open source, no strings attached
 
-WhisperX Transcriber exists because powerful AI tools should be accessible to everyone — not locked behind expensive subscriptions or a command line that most people will never open.
+WhisperX Transcriber exists because powerful AI tools should be accessible to everyone — not locked behind expensive subscriptions or a command line most people will never open.
 
 Built entirely on open-source foundations: OpenAI's Whisper, WhisperX, faster-whisper, and customtkinter. Released under the MIT license — free to use, modify, fork, and build on, forever.
 
-No telemetry. No tracking. No hidden network calls. Every line of code that runs on your machine is readable in this repo.
+No telemetry. No tracking. No hidden network calls. Every line of code that runs on your machine is here in this repo.
 
 ---
 
-## Contributing
+## Help build it
 
-Contributions are genuinely welcome — bug reports, feature requests, UI improvements, language support, or just testing on different hardware.
+Contributions are genuinely welcome — bug reports, feature requests, UI improvements, new language support, or just testing on different hardware and sharing what you find.
 
 ```bash
 git clone https://github.com/ibrahimqureshae/whisperx-transcriber.git
@@ -501,13 +545,13 @@ cd whisperx-transcriber
 run.bat
 ```
 
-The codebase is intentionally small and readable. `app.py` is the entire GUI, `core/pipeline.py` is all the AI logic. A new contributor can understand the whole project in an afternoon.
+The codebase is intentionally small. `app.py` is the entire GUI, `core/pipeline.py` is all the AI logic — a new contributor can understand the whole project in an afternoon.
 
-Open an [issue](../../issues) or a pull request — both are welcome.
+Open an [issue](../../issues) to report a bug or suggest a feature. Open a pull request if you've already built something — both are welcome.
 
 ---
 
-## Tech stack
+## What it's built on
 
 | Layer | Library |
 |---|---|
