@@ -18,17 +18,20 @@ Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](htt
 
 ## Quick Access
 
-**Overview**
-[Why use this?](#why-use-this) · [Interface](#interface) · [What it does](#what-it-does) · [Sample output](#sample-output) · [Supported languages](#supported-languages) · [Who is this for?](#who-is-this-for)
+**Is this for me?**
+[Why use this?](#why-use-this) · [What it does](#what-it-does) · [Supported languages](#supported-languages) · [Who is this for?](#who-is-this-for) · [Sample output](#sample-output)
 
-**For End Users**
-[Download & install](#for-end-users) · [First-time setup](#step-3--first-launch-one-time-setup) · [CPU vs GPU](#cpu-vs-gpu) · [Models](#models) · [Output formats](#output-formats) · [Troubleshooting](#troubleshooting)
+**Get Started**
+[Download & install](#for-end-users) · [First-time setup](#step-3--first-launch-one-time-setup) · [CPU vs GPU](#cpu-vs-gpu) · [How to transcribe](#step-4--transcribe)
 
-**For Developers**
-[Quick start](#quick-start) · [Project structure](#project-structure) · [Architecture](#architecture--thin-launcher-pattern) · [Build release zip](#building-the-release-zip) · [CLI usage](#cli-usage)
+**Using the App**
+[Interface overview](#interface) · [Models](#models) · [Output formats](#output-formats) · [Troubleshooting](#troubleshooting)
 
-**Project**
-[Roadmap](#roadmap) · [Support the Project](#support-the-project) · [Contributing](#contributing) · [Tech stack](#tech-stack) · [License](#license)
+**Build & Hack**
+[Quick start](#quick-start) · [Project structure](#project-structure) · [Architecture](#architecture--thin-launcher-pattern) · [CLI usage](#cli-usage) · [Build release zip](#building-the-release-zip)
+
+**Community & Support**
+[What's coming](#roadmap) · [Support the project](#support-the-project) · [Contribute](#contributing) · [Tech stack](#tech-stack) · [License](#license)
 
 ---
 
