@@ -448,6 +448,8 @@ class SetupWizard:
                         self.win.after(0, lambda s=t: self._activity_lbl.configure(text=s))
                 elif kind == "p":
                     self.win.after(0, lambda v=text: self._set_install_progress(v))
+                elif kind == "i":
+                    self.win.after(0, self._set_install_indeterminate)
                 else:
                     if hasattr(self, "_log_box") and text:
                         if "━" in text or "─" in text:
@@ -526,6 +528,7 @@ class SetupWizard:
                     if buf.strip():
                         self._q.put(("n", buf.rstrip()))
                         self._maybe_emit_progress(buf)
+                        self._check_install_phase(buf)
                     buf = ""
                 else:
                     buf += ch
@@ -555,6 +558,21 @@ class SetupWizard:
             self._prog.set(max(0.0, min(1.0, frac)))
         if hasattr(self, "_pct_lbl"):
             self._pct_lbl.configure(text=f"{int(frac * 100)}%")
+
+    def _check_install_phase(self, line: str):
+        """Downloads are done once pip starts installing — switch to an
+        indeterminate bar so it doesn't sit frozen at a download percentage."""
+        if "Installing collected packages" in line or "Building wheel" in line:
+            self._q.put(("i", ""))
+
+    def _set_install_indeterminate(self):
+        if hasattr(self, "_prog"):
+            self._prog.configure(mode="indeterminate")
+            self._prog.start()
+        if hasattr(self, "_pct_lbl"):
+            self._pct_lbl.configure(text="")
+        if hasattr(self, "_status_var"):
+            self._status_var.set("Installing packages (this can take a few minutes)...")
 
     def _run_install(self):
         try:
@@ -652,6 +670,7 @@ class SetupWizard:
                 rc = self._run_pip(cmd)
                 self._install_done = True
                 if hasattr(self, "_prog"):
+                    self.win.after(0, self._prog.stop)
                     self.win.after(0, lambda: self._prog.configure(mode="determinate"))
                 if rc != 0:
                     raise RuntimeError(

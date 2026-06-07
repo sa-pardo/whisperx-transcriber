@@ -58,45 +58,103 @@ def resolve_compute(t_dev: str, compute: str) -> tuple:
     return compute, False
 
 
-def download_model(model: str, model_dir: str, progress_cb=None) -> None:
+def _dir_size(path: str) -> int:
+    """Total size in bytes of every file under path (0 if it doesn't exist)."""
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+def download_model(model: str, model_dir: str,
+                   progress_cb=None, cancel_cb=None) -> None:
     """
     Pre-download a faster-whisper model with real progress reporting.
 
-    progress_cb(done_bytes: int, total_bytes: int) is called as bytes arrive.
+    progress_cb(done_bytes, total_bytes) is called ~3x/sec while downloading,
+    for display only (exceptions from it are ignored).  cancel_cb() is polled
+    between files; return True from it to abort the download.
+
     Stores into {model_dir}/hub so a later load_model() finds it cached and
-    does not re-download.  Safe to call even if already cached (no-op).
+    does not re-download.  Raises on download failure — the caller may fall
+    back to load_model(), which downloads the model itself (no progress).
 
-    Raises on download failure — the caller may fall back to load_model(),
-    which downloads the model itself (without progress).
+    Progress is measured by polling the size of the download folder on disk
+    rather than via tqdm: huggingface_hub only routes a custom tqdm to its
+    outer "Fetching N files" counter, not the per-byte file bars, so a tqdm
+    hook reports file-count progress (effectively 0%) instead of bytes.
     """
+    import threading
+    import time as _time
     from huggingface_hub import snapshot_download
+
+    repo       = f"Systran/faster-whisper-{model}"
+    cache_dir  = os.path.join(model_dir, "hub")
+    model_root = os.path.join(cache_dir, f"models--Systran--faster-whisper-{model}")
+
+    # Total download size, fetched up front so the fraction has a fixed
+    # denominator (the progress bar fills smoothly from 0 to 100%).
+    total_size = 0
     try:
-        from huggingface_hub.utils import tqdm as _BaseTqdm
+        from huggingface_hub import HfApi
+        info = HfApi().model_info(repo, files_metadata=True)
+        total_size = sum((s.size or 0) for s in (info.siblings or []))
     except Exception:
-        from tqdm.auto import tqdm as _BaseTqdm
+        total_size = 0
 
-    files: dict = {}
+    stop = threading.Event()
 
-    class _ProgressTqdm(_BaseTqdm):
-        def update(self, n=1):
-            ret = super().update(n)
+    def _poll():
+        while not stop.is_set():
+            sz = _dir_size(model_root)
             try:
-                if progress_cb is not None and self.total:
-                    files[id(self)] = (self.n, self.total)
-                    done  = sum(a for a, _ in files.values())
-                    total = sum(b for _, b in files.values())
-                    progress_cb(done, total)
+                progress_cb(min(sz, total_size), total_size)
             except Exception:
                 pass
-            return ret
+            stop.wait(0.3)
 
-    repo = f"Systran/faster-whisper-{model}"
-    cache_dir = os.path.join(model_dir, "hub")
+    poller = None
+    if progress_cb is not None and total_size:
+        poller = threading.Thread(target=_poll, daemon=True)
+        poller.start()
+
+    # A tqdm subclass purely to honor cancellation (checked between files).
+    cancel_tqdm = None
+    if cancel_cb is not None:
+        try:
+            from huggingface_hub.utils import tqdm as _BaseTqdm
+        except Exception:
+            from tqdm.auto import tqdm as _BaseTqdm
+
+        class _CancelTqdm(_BaseTqdm):
+            def update(self, n=1):
+                if cancel_cb():
+                    raise RuntimeError("cancelled")
+                return super().update(n)
+
+        cancel_tqdm = _CancelTqdm
+
     try:
-        snapshot_download(repo, cache_dir=cache_dir, tqdm_class=_ProgressTqdm)
-    except TypeError:
-        # Older huggingface_hub without tqdm_class support — download anyway
-        snapshot_download(repo, cache_dir=cache_dir)
+        kwargs = {"cache_dir": cache_dir, "max_workers": 1}
+        if cancel_tqdm is not None:
+            try:
+                snapshot_download(repo, tqdm_class=cancel_tqdm, **kwargs)
+            except TypeError:
+                snapshot_download(repo, **kwargs)
+        else:
+            snapshot_download(repo, **kwargs)
+    finally:
+        stop.set()
+        # Land cleanly on 100% (unless we were cancelled)
+        if progress_cb is not None and total_size and not (cancel_cb and cancel_cb()):
+            try:
+                progress_cb(total_size, total_size)
+            except Exception:
+                pass
 
 
 def load_model(model: str, t_dev: str, compute: str, language, beam: int):
@@ -110,9 +168,44 @@ def load_model(model: str, t_dev: str, compute: str, language, beam: int):
     )
 
 
+def _ensure_ffmpeg_on_path() -> None:
+    """
+    whisperx.load_audio() invokes a bare ``ffmpeg``.  imageio-ffmpeg ships a
+    version-named binary (e.g. ``ffmpeg-win-x86_64-v7.1.exe``), which a bare
+    ``ffmpeg`` call cannot find — that is the cause of ``[WinError 2]``.
+
+    Expose the bundled binary under the plain name ``ffmpeg(.exe)`` and put its
+    folder on PATH so the call resolves.  Idempotent and best-effort.
+    """
+    import shutil
+    if shutil.which("ffmpeg"):
+        return
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return
+    if not exe or not os.path.isfile(exe):
+        return
+
+    bin_dir = os.path.dirname(exe)
+    name    = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    target  = os.path.join(bin_dir, name)
+    if not os.path.isfile(target):
+        try:
+            os.link(exe, target)        # instant, no extra disk space (same volume)
+        except Exception:
+            try:
+                shutil.copy2(exe, target)   # fallback if hardlink unsupported
+            except Exception:
+                return
+    os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+
+
 def load_audio(path: str):
     """Load audio from file and return audio array."""
     import whisperx
+    _ensure_ffmpeg_on_path()
     return whisperx.load_audio(path)
 
 

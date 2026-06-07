@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import queue
 import threading
 import traceback
@@ -931,6 +932,8 @@ class App(ctk.CTk):
     def _worker(self, cfg):
         try:
             from core import pipeline
+            if not cfg["model_dir"]:
+                cfg["model_dir"] = _default_model_dir()
             os.environ["HF_HOME"] = cfg["model_dir"]
 
             # ── Device ───────────────────────────────────────────────────────
@@ -954,12 +957,15 @@ class App(ctk.CTk):
                 self._log(f"Downloading model '{cfg['model']}' for the first time...")
                 self._log("  The model will be saved and reused on all future runs.")
                 self.after(0, lambda: self._status_var.set("Downloading model..."))
-                self.after(0, self._progress_determinate)
+                self.after(0, self._progress_indeterminate)
                 self._dl_last = 0
+                self._dl_finalizing = False
+                self._dl_determinate = False
                 try:
                     pipeline.download_model(
                         cfg["model"], cfg["model_dir"],
-                        progress_cb=self._model_dl_progress)
+                        progress_cb=self._model_dl_progress,
+                        cancel_cb=lambda: self._stop.is_set())
                     self._log("  Model downloaded.")
                 except Exception as e:
                     if self._stop.is_set():
@@ -1056,21 +1062,33 @@ class App(ctk.CTk):
         self._progress.set(0)
 
     def _progress_indeterminate(self):
+        self._progress.stop()
         self._progress.configure(mode="indeterminate")
         self._progress.set(0)
         self._progress.start()
 
     def _model_dl_progress(self, done, total):
-        """Called from the worker thread as model bytes arrive."""
-        if self._stop.is_set():
-            raise RuntimeError("cancelled")
-        import time
+        """Display-only progress, called ~3x/sec from the download poller."""
         frac = (done / total) if total else 0
+        # Once every byte is in, HuggingFace finalizes the files on disk (a
+        # large copy on Windows) with no further size growth. Switch to an
+        # indeterminate bar so it doesn't look frozen at 100%.
+        if frac >= 1.0 and total > 20 * 1048576:
+            if not getattr(self, "_dl_finalizing", False):
+                self._dl_finalizing = True
+                self.after(0, self._progress_indeterminate)
+                self.after(0, lambda: self._status_var.set(
+                    "Finalizing model files..."))
+            return
         now = time.time()
-        # Throttle UI updates — but always emit the final 100%
-        if frac < 1.0 and now - getattr(self, "_dl_last", 0) < 0.2:
+        if now - getattr(self, "_dl_last", 0) < 0.2:
             return
         self._dl_last = now
+        # Switch from the initial indeterminate spinner to a real bar once the
+        # first measurement arrives.
+        if not getattr(self, "_dl_determinate", False):
+            self._dl_determinate = True
+            self.after(0, self._progress_determinate)
         mb_d, mb_t = done / 1048576, total / 1048576
         txt = f"Downloading model... {mb_d:.0f} / {mb_t:.0f} MB  ({frac*100:.0f}%)"
         self.after(0, lambda: self._status_var.set(txt))
