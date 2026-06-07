@@ -237,8 +237,7 @@ whisperx-transcriber/
 │
 ├── packaging/
 │   ├── build.bat           Builds the thin launcher exe + creates portable zip
-│   ├── launcher.spec       PyInstaller spec — GUI only, no ML packages
-│   └── installer.iss       Inno Setup script (unused — kept for reference)
+│   └── launcher.spec       PyInstaller spec — GUI only, no ML packages
 │
 └── assets/
     └── icon.ico            App icon
@@ -329,6 +328,30 @@ Output: `dist/release/WhisperXTranscriber.zip`
 - [ ] Speaker diarization UI
 - [ ] Translation mode (transcribe + translate to English)
 - [ ] macOS `.app` bundle
+
+---
+
+## Open source — contributions welcome
+
+WhisperX Transcriber is free and open source under the MIT license. The source code is fully available and the project welcomes contributions of any kind.
+
+**Ways to contribute:**
+
+- **Bug reports** — open an [issue](../../issues) with the log output and steps to reproduce
+- **Feature requests** — open an issue describing the use case
+- **Code contributions** — fork the repo, make your changes, open a pull request
+- **Language support** — add more languages to the `_lang_map` in `app.py`
+- **Testing** — test on different hardware, GPUs, or audio types and report findings
+
+**Getting started as a contributor:**
+
+```bash
+git clone https://github.com/ibrahimqureshae/whisperx-transcriber.git
+cd whisperx-transcriber
+run.bat   # sets up the dev environment and launches the app
+```
+
+The codebase is intentionally small and readable — `app.py` is the entire GUI, `setup_wizard.py` is the first-run installer, `transcribe.py` is the headless CLI. No framework magic, no hidden complexity.
 
 ## License
 
