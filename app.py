@@ -42,18 +42,18 @@ _MAC_BG  = ("#e8f5e8", "#162016")
 _DROP    = ("#f0f0f0", "#1e1e1e")
 
 _PRI     = ("#111111", "#ffffff")
-_LOGO_S  = ("#888888", "#3a3a3a")
-_NAV_OF  = ("#777777", "#555555")
+_LOGO_S  = ("#888888", "#888888")
+_NAV_OF  = ("#777777", "#666666")
 _LABEL   = ("#444444", "#888888")
-_HINT    = ("#999999", "#3a3a3a")
-_SECHI   = ("#777777", "#4a4a4a")
-_STAT    = ("#444444", "#555555")
-_LOG_H   = ("#555555", "#333333")
+_HINT    = ("#999999", "#666666")
+_SECHI   = ("#777777", "#666666")
+_STAT    = ("#444444", "#888888")
+_LOG_H   = ("#555555", "#666666")
 _LOG_B   = ("#111111", "#c0c0c0")
 _FMT_N   = ("#111111", "#dddddd")
-_FMT_D   = ("#666666", "#3a3a3a")
+_FMT_D   = ("#666666", "#777777")
 _TOGG_L  = ("#333333", "#cccccc")
-_DIM_TXT = ("#999999", "#444444")
+_DIM_TXT = ("#999999", "#888888")
 _MAC_TXT = ("#2a7a2a", "#3a7a3a")
 
 
@@ -334,7 +334,7 @@ class App(ctk.CTk):
         self._log_btn = ctk.CTkButton(
             sb, text="  Log", anchor="w", font=F(13), height=40,
             corner_radius=9, fg_color="transparent",
-            hover_color=_NAVHOV, text_color=_NAV_OF,
+            hover_color=_NAVHOV, text_color=_PRI,
             command=self._toggle_log,
         )
         self._log_btn.grid(row=8, column=0, sticky="ew", padx=10, pady=1)
@@ -398,8 +398,7 @@ class App(ctk.CTk):
             scrollbar_button_color=_SCRL_B)
         self.log_area.grid(row=1, column=0, sticky="nsew")
 
-        self._log_visible = False
-        self._log_wrap.grid_remove()
+        self._log_visible = True
 
     # ── Files panel ───────────────────────────────────────────────────────────
 
@@ -847,30 +846,14 @@ class App(ctk.CTk):
 
     def _worker(self, cfg):
         try:
+            from core import pipeline
             os.environ["HF_HOME"] = cfg["model_dir"]
-            import torch
-            import whisperx
 
-            req = cfg["device"]
-            if req == "auto":
-                if torch.cuda.is_available():
-                    device = "cuda"
-                elif (hasattr(torch.backends, "mps") and
-                      torch.backends.mps.is_available()):
-                    device = "mps"
-                else:
-                    device = "cpu"
-            else:
-                device = req
-
-            t_dev = "cpu" if device == "mps" else device
-            a_dev = device
-
-            compute = cfg["compute"]
-            if t_dev == "cpu" and compute in ("float16", "int8_float16"):
-                compute = "int8"
-                self._log("  float16 not supported on CPU - using int8")
-
+            # ── Device ───────────────────────────────────────────────────────
+            _, t_dev, a_dev = pipeline.detect_device(cfg["device"])
+            compute, adjusted = pipeline.resolve_compute(t_dev, cfg["compute"])
+            if adjusted:
+                self._log("  float16 not supported on CPU — using int8")
             self._log(f"Device: {t_dev.upper()}   Compute: {compute}")
             if a_dev != t_dev:
                 self._log(f"Alignment: {a_dev.upper()}")
@@ -879,12 +862,11 @@ class App(ctk.CTk):
 
             lang = None if cfg["language"] == "auto" else cfg["language"]
 
+            # ── Model ─────────────────────────────────────────────────────────
             model_cache = os.path.join(
                 cfg["model_dir"],
                 f"models--Systran--faster-whisper-{cfg['model']}")
-            first_download = not os.path.isdir(model_cache)
-
-            if first_download:
+            if not os.path.isdir(model_cache):
                 self._log(f"Downloading model '{cfg['model']}' for the first time...")
                 self._log("  This may take several minutes depending on your connection.")
                 self._log("  The model will be saved and reused on all future runs.")
@@ -893,84 +875,54 @@ class App(ctk.CTk):
                 self._log(f"Loading model '{cfg['model']}' from cache...")
                 self.after(0, lambda: self._status_var.set("Loading model..."))
 
-            model = whisperx.load_model(
-                cfg["model"], t_dev, compute_type=compute,
-                language=lang, asr_options={"beam_size": cfg["beam"]})
+            model = pipeline.load_model(
+                cfg["model"], t_dev, compute, lang, cfg["beam"])
             if self._stop.is_set():
                 return
 
+            # ── Audio ─────────────────────────────────────────────────────────
             self._log("Loading audio...")
             self.after(0, lambda: self._status_var.set("Loading audio..."))
-            audio = whisperx.load_audio(cfg["audio"])
+            audio = pipeline.load_audio(cfg["audio"])
             if self._stop.is_set():
                 return
 
+            # ── Transcribe ────────────────────────────────────────────────────
             self._log("Transcribing...")
             self.after(0, lambda: self._status_var.set("Transcribing..."))
-            tx = {"batch_size": cfg["batch"]}
-            if lang:
-                tx["language"] = lang
-            result = model.transcribe(audio, **tx)
-            det = result.get("language", lang or "en")
+            result, det = pipeline.transcribe(model, audio, cfg["batch"], lang)
             self._log(f"  Language: {det}   Segments: {len(result['segments'])}")
             if self._stop.is_set():
                 return
 
+            # ── Align ─────────────────────────────────────────────────────────
             needs_align = cfg["align"] and (
                 "word_json" in cfg["formats"] or cfg["highlight"])
             if needs_align:
                 self._log("Aligning word timestamps...")
                 self.after(0, lambda: self._status_var.set("Aligning..."))
                 try:
-                    ma, meta = whisperx.load_align_model(
-                        language_code=det, device=a_dev)
-                    result = whisperx.align(
-                        result["segments"], ma, meta, audio, a_dev)
+                    result = pipeline.align(result, det, a_dev, audio)
                 except Exception as e:
-                    self._log(f"  Warning: {e}")
-                    if a_dev != "cpu":
-                        self._log("  Retrying alignment on CPU...")
-                        try:
-                            ma, meta = whisperx.load_align_model(
-                                language_code=det, device="cpu")
-                            result = whisperx.align(
-                                result["segments"], ma, meta, audio, "cpu")
-                        except Exception as e2:
-                            self._log(f"  Alignment failed: {e2}")
-            # whisperx.align() drops "language" from the result dict; restore it
-            # so SRT/VTT writers don't crash with KeyError: 'language'
-            result.setdefault("language", det)
-
+                    self._log(f"  Alignment failed: {e} — continuing without word timestamps")
+                    result.setdefault("language", det)
+            else:
+                result.setdefault("language", det)
             if self._stop.is_set():
                 return
 
-            base = os.path.splitext(os.path.basename(cfg["audio"]))[0]
-            os.makedirs(cfg["out_dir"], exist_ok=True)
+            # ── Export ────────────────────────────────────────────────────────
             self._log("Saving files...")
             self.after(0, lambda: self._status_var.set("Saving..."))
-
-            if "word_json" in cfg["formats"]:
-                words = [w for seg in result["segments"]
-                         for w in seg.get("words", [])]
-                out_path = os.path.join(cfg["out_dir"], base + "_words.json")
-                with open(out_path, "w", encoding="utf-8") as fh:
-                    json.dump(words, fh, indent=2, ensure_ascii=False)
-                self._log(f"  word_json  ->  {out_path}")
-
-            std = [f for f in cfg["formats"] if f != "word_json"]
-            if std:
-                from whisperx.utils import get_writer
-                wo = {"max_line_width": cfg["max_width"],
-                      "max_line_count": cfg["max_count"],
-                      "highlight_words": cfg["highlight"]}
-                for fmt in std:
-                    try:
-                        get_writer(fmt, cfg["out_dir"])(
-                            result, cfg["audio"], wo)
-                        self._log(f"  {fmt:<10}->  "
-                                  f"{os.path.join(cfg['out_dir'], base + '.' + fmt)}")
-                    except Exception as e:
-                        self._log(f"  {fmt} error: {e}")
+            for fmt, path, err in pipeline.export(
+                    result, cfg["formats"], cfg["out_dir"], cfg["audio"],
+                    {"max_width": cfg["max_width"],
+                     "max_count": cfg["max_count"],
+                     "highlight": cfg["highlight"]}):
+                if err:
+                    self._log(f"  {fmt} error: {err}")
+                else:
+                    self._log(f"  {fmt:<10}->  {path}")
 
             self._log("Done!")
             self.after(0, lambda: self._status_var.set("Done"))
