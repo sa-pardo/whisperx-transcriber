@@ -338,6 +338,11 @@ Click **Retry** — the wizard picks up where it left off and skips packages tha
 **"CUDA out of memory" during transcription**  
 Go to **Quality** and lower the Speed (batch size) value. Try 8, then 4.
 
+**"An Application Control policy has blocked this file" (WinError 4551)**  
+Windows Smart App Control is blocking a native library that the AI engine depends on. To fix it: open **Windows Security → App & browser control → Smart App Control settings** and switch it to **Off**, then restart your laptop and run the app again. If you'd rather not turn it off entirely, add the `WhisperXTranscriber` folder as an exclusion under **Windows Security → Virus & threat protection → Exclusions** instead.
+
+> Note: Smart App Control can only be disabled — it cannot be re-enabled without reinstalling Windows. This is a Windows limitation, not something the app can work around.
+
 **Word alignment failed**  
 Turn off **Word timestamps** in the Save panel. SRT, VTT, and TXT still export without word-level timing.
 
