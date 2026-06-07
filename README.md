@@ -237,8 +237,6 @@ The underlying Whisper model supports **99 languages** in total — all accessib
 
 ---
 
----
-
 # Get Started
 
 > No terminal, no Python knowledge required. Just download, extract, and run.
@@ -297,18 +295,29 @@ The wizard detects your GPU automatically. You can override the device any time 
 
 ### Choosing a model
 
-Models download on first use and are cached — you never re-download them.
+**Not sure where to start? Use `large-v2`** — it's the default for a reason. The only reasons to go smaller are speed on CPU or limited disk space.
 
-| Model | Size | Best for |
-|---|---|---|
-| `tiny` | ~75 MB | Quick test, low accuracy |
-| `base` | ~145 MB | Fast rough drafts |
-| `small` | ~465 MB | Good balance of speed and quality |
-| `medium` | ~1.5 GB | High accuracy |
-| `large-v2` *(default)* | ~3 GB | Best quality — start here |
-| `large-v3` | ~3 GB | Newest large model |
+| Model | Disk | GPU speed | CPU speed | Accuracy |
+|---|---|---|---|---|
+| `tiny` | ~75 MB | Very fast | Fast | Low |
+| `base` | ~145 MB | Very fast | Moderate | Fair |
+| `small` | ~465 MB | Fast | ~Realtime | Good |
+| `medium` | ~1.5 GB | Moderate | Slow | High |
+| `large-v2` *(default)* | ~3 GB | ~Realtime | Very slow | Best |
+| `large-v3` | ~3 GB | ~Realtime | Very slow | Best |
 
-Not sure which to pick? Start with `large-v2`. Drop down to `small` if you need speed or have limited disk space.
+Models download once on first use and are cached — you never re-download them.
+
+**Which one should I pick?**
+
+| Situation | Recommendation |
+|---|---|
+| Just trying the app for the first time | `tiny` or `base` — small, fast, good enough to see how it works |
+| Running on CPU and need practical speed | `small` — best accuracy-to-speed tradeoff on CPU, runs at roughly realtime |
+| Have an NVIDIA GPU | `large-v2` — runs in realtime, maximum accuracy, no compromise needed |
+| Transcribing Arabic, Urdu, Pashto, or other non-English audio | `large-v2` or `large-v3` — smaller models lose accuracy on non-English significantly |
+| Making subtitles or content for an audience | `large-v2` — don't compromise on quality for published work |
+| Want the absolute newest model | `large-v3` — marginally better on some languages, but uses slightly more VRAM; most users won't notice a difference |
 
 ---
 
@@ -351,8 +360,6 @@ Switch to a smaller model (`small` or `base`) in the Quality panel.
 
 **Something else is wrong**  
 Open a [GitHub issue](../../issues) and paste the output from the **Activity** panel — that's the fastest way to get help.
-
----
 
 ---
 
@@ -450,8 +457,6 @@ python transcribe.py audio.mp3 --model-dir D:\models
 | `--device` | `cuda` `cpu` | auto-detect |
 | `--output` | `srt` `vtt` `txt` `tsv` `json` `word_json` | `word_json` |
 | `--model-dir` | Path to model cache folder | `./Models` |
-
----
 
 ---
 
