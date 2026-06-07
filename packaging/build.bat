@@ -59,6 +59,11 @@ copy /Y "%ROOT%\setup_wizard.py"  "%DIST%\setup_wizard.py"  >nul
 copy /Y "%ROOT%\transcribe.py"    "%DIST%\transcribe.py"    >nul
 copy /Y "%ROOT%\version.txt"      "%DIST%\version.txt"      >nul
 
+rem Copy the pipeline module
+if not exist "%DIST%\core" mkdir "%DIST%\core"
+copy /Y "%ROOT%\core\__init__.py"  "%DIST%\core\__init__.py"  >nul
+copy /Y "%ROOT%\core\pipeline.py"  "%DIST%\core\pipeline.py"  >nul
+
 rem Create empty runtime/ and Models/ placeholder folders
 if not exist "%DIST%\runtime"  mkdir "%DIST%\runtime"
 if not exist "%DIST%\Models"   mkdir "%DIST%\Models"
