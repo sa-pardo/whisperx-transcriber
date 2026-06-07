@@ -429,18 +429,36 @@ This project is built and maintained by a single developer — a working student
 
 ## Support the Project
 
-This app is completely free and always will be. But building and maintaining it takes real time — time that competes with coursework, research, and everything else that comes with being a student.
+I'm a working student engineer doing part-time research, building this entirely in my spare time. WhisperX Transcriber is free and always will be — but if it's saved you hours of manual transcription work, consider buying me a coffee to keep development going.
 
-If WhisperX Transcriber has been useful to you, consider supporting it:
+<p align="center">
+  <a href="https://github.com/sponsors/ibrahimqureshae">
+    <img src="https://img.shields.io/badge/Sponsor%20on%20GitHub-%E2%99%A5-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub"/>
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://www.paypal.me/mibrahimqr">
+    <img src="https://img.shields.io/badge/Donate%20via%20PayPal-0070ba?style=for-the-badge&logo=paypal&logoColor=white" alt="Donate via PayPal"/>
+  </a>
+</p>
 
-| | |
-|---|---|
-| **♥ GitHub Sponsors** | [![Sponsor](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ibrahimqureshae) Monthly or one-time, directly through GitHub |
-| **PayPal** | [![Donate](https://img.shields.io/badge/Donate-PayPal-0070ba?style=flat&logo=paypal&logoColor=white)](https://www.paypal.me/mibrahimqr) One-time donation, any amount |
-| **★ Star the repo** | [![Stars](https://img.shields.io/github/stars/ibrahimqureshae/whisperx-transcriber?style=flat&logo=github)](https://github.com/ibrahimqureshae/whisperx-transcriber/stargazers) Free, takes two seconds, helps discoverability |
-| **Share it** | Tell a colleague, post in a community, recommend it to someone who needs it |
+### Sponsorship tiers
 
-Every contribution — financial or otherwise — directly enables more development time and faster feature delivery.
+| Tier | Amount | What it means |
+|---|---|---|
+| ☕ **A coffee** | $3 / month | Keeps me caffeinated during late-night coding sessions |
+| 🍕 **A slice** | $10 / month | Covers tools, storage, and GPU time for testing |
+| 📚 **A textbook** | $25 / month | Directly offsets research and coursework costs so I can spend more time on this |
+| 🚀 **A booster** | $50 / month | Priority feature requests — tell me what you need built next |
+
+> **One-time donation?** Any amount via [PayPal](https://www.paypal.me/mibrahimqr) is equally appreciated. There's no minimum — even $1 is a genuine signal that this work matters.
+
+### Other ways to help
+
+- **★ Star the repo** — free, takes two seconds, massively helps discoverability  
+- **Share it** — tell a colleague, post in a community, recommend it to someone who needs it  
+- **Open an issue** — bug reports and feature requests are contributions too
+
+Every bit of support — financial or otherwise — directly translates to more development time and faster feature delivery.
 
 ---
 
