@@ -952,9 +952,21 @@ class App(ctk.CTk):
                 f"models--Systran--faster-whisper-{cfg['model']}")
             if not os.path.isdir(model_cache):
                 self._log(f"Downloading model '{cfg['model']}' for the first time...")
-                self._log("  This may take several minutes depending on your connection.")
                 self._log("  The model will be saved and reused on all future runs.")
                 self.after(0, lambda: self._status_var.set("Downloading model..."))
+                self.after(0, self._progress_determinate)
+                self._dl_last = 0
+                try:
+                    pipeline.download_model(
+                        cfg["model"], cfg["model_dir"],
+                        progress_cb=self._model_dl_progress)
+                    self._log("  Model downloaded.")
+                except Exception as e:
+                    if self._stop.is_set():
+                        return
+                    self._log(f"  Could not track progress ({e}) — downloading...")
+                self.after(0, self._progress_indeterminate)
+                self.after(0, lambda: self._status_var.set("Loading model..."))
             else:
                 self._log(f"Loading model '{cfg['model']}' from cache...")
                 self.after(0, lambda: self._status_var.set("Loading model..."))
@@ -1033,7 +1045,36 @@ class App(ctk.CTk):
         self._stop_btn.configure(state="disabled", text_color=_BAR,
                                   hover_color=_BAR)
         self._progress.stop()
+        self._progress.configure(mode="indeterminate")
         self._progress.set(0)
+
+    # ── Progress helpers ──────────────────────────────────────────────────────
+
+    def _progress_determinate(self):
+        self._progress.stop()
+        self._progress.configure(mode="determinate")
+        self._progress.set(0)
+
+    def _progress_indeterminate(self):
+        self._progress.configure(mode="indeterminate")
+        self._progress.set(0)
+        self._progress.start()
+
+    def _model_dl_progress(self, done, total):
+        """Called from the worker thread as model bytes arrive."""
+        if self._stop.is_set():
+            raise RuntimeError("cancelled")
+        import time
+        frac = (done / total) if total else 0
+        now = time.time()
+        # Throttle UI updates — but always emit the final 100%
+        if frac < 1.0 and now - getattr(self, "_dl_last", 0) < 0.2:
+            return
+        self._dl_last = now
+        mb_d, mb_t = done / 1048576, total / 1048576
+        txt = f"Downloading model... {mb_d:.0f} / {mb_t:.0f} MB  ({frac*100:.0f}%)"
+        self.after(0, lambda: self._status_var.set(txt))
+        self.after(0, lambda f=frac: self._progress.set(min(1.0, f)))
 
 
 if __name__ == "__main__":

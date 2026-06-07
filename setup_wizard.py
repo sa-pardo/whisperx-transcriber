@@ -222,6 +222,7 @@ class SetupWizard:
                      text_color=_PRI).grid(row=0, column=0, sticky="w", pady=(0, 6))
         ctk.CTkLabel(b,
                      text=("This wizard installs the AI transcription engine.\n"
+                            "Includes: torch · whisperX · ffmpeg · all dependencies.\n"
                             "This is a one-time 1–3 GB download (2–5 GB on disk).\n"
                             "Subsequent launches open instantly."),
                      font=_F(13), text_color=_DIM,
@@ -445,6 +446,8 @@ class SetupWizard:
                     if hasattr(self, "_activity_lbl"):
                         t = text.strip()[:90]
                         self.win.after(0, lambda s=t: self._activity_lbl.configure(text=s))
+                elif kind == "p":
+                    self.win.after(0, lambda v=text: self._set_install_progress(v))
                 else:
                     if hasattr(self, "_log_box") and text:
                         if "━" in text or "─" in text:
@@ -475,8 +478,9 @@ class SetupWizard:
         self.win.after(0, _do)
 
     def _animate_progress(self, current: float, target: float):
-        """Slowly drift the progress bar toward target while install is running."""
-        if getattr(self, "_install_done", False):
+        """Drift the bar toward target until real pip progress takes over."""
+        if getattr(self, "_install_done", False) or \
+                getattr(self, "_real_progress_seen", False):
             return
         next_val = min(current + 0.005, target)
         self._set_progress(next_val)
@@ -516,10 +520,12 @@ class SetupWizard:
                 if ch == "\r":
                     if buf.strip():
                         self._q.put(("r", buf))
+                        self._maybe_emit_progress(buf)
                     buf = ""
                 elif ch == "\n":
                     if buf.strip():
                         self._q.put(("n", buf.rstrip()))
+                        self._maybe_emit_progress(buf)
                     buf = ""
                 else:
                     buf += ch
@@ -528,8 +534,31 @@ class SetupWizard:
         proc.wait()
         return proc.returncode
 
+    def _maybe_emit_progress(self, line: str):
+        """Parse pip's 'X/Y MB' download lines into a real progress fraction."""
+        import re
+        m = re.search(r"(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*[kKmMgG]i?B", line)
+        if not m:
+            return
+        try:
+            done, total = float(m.group(1)), float(m.group(2))
+        except ValueError:
+            return
+        if total <= 0:
+            return
+        self._real_progress_seen = True
+        self._q.put(("p", done / total))
+
+    def _set_install_progress(self, frac: float):
+        if hasattr(self, "_prog"):
+            self._prog.configure(mode="determinate")
+            self._prog.set(max(0.0, min(1.0, frac)))
+        if hasattr(self, "_pct_lbl"):
+            self._pct_lbl.configure(text=f"{int(frac * 100)}%")
+
     def _run_install(self):
         try:
+            self._real_progress_seen = False
             py      = self.python_path
             runtime = self.runtime_dir
             venv_py  = os.path.join(runtime, "Scripts", "python.exe")
@@ -585,23 +614,24 @@ class SetupWizard:
             TORCH_MIN = "2.8.0"
 
             if self._pkg_installed(venv_pip, "whisperx"):
-                self._log("\n[All packages] Already installed — skipping.")
-                self._set_progress(0.95)
+                self._log("\n[whisperx] Already installed — skipping.")
+                self._set_progress(0.85)
             else:
                 torch_index = _cuda_torch_index()
                 self._install_done = False
-                self.win.after(1000, lambda: self._animate_progress(0.10, 0.89))
+                self.win.after(1000, lambda: self._animate_progress(0.10, 0.83))
 
                 if torch_index:
                     self._set_status(
                         "Downloading AI engine and dependencies (1–3 GB, CUDA)...")
                     self._log(
-                        f"\n[Installing] torch>={TORCH_MIN}+CUDA, whisperx, deps...")
+                        f"\n[Installing] torch>={TORCH_MIN}+CUDA, whisperx, ffmpeg, deps...")
                     cmd = [
                         venv_pip, "install", "--timeout", "120",
                         f"torch>={TORCH_MIN}",
                         f"torchaudio>={TORCH_MIN}",
                         "whisperx",
+                        "imageio-ffmpeg",
                         "customtkinter>=5.2.2",
                         "Pillow",
                         "--index-url", torch_index,
@@ -610,10 +640,11 @@ class SetupWizard:
                 else:
                     self._set_status(
                         "Downloading AI engine and dependencies (1–3 GB)...")
-                    self._log("\n[Installing] whisperx + customtkinter + Pillow...")
+                    self._log("\n[Installing] whisperx + ffmpeg + customtkinter + Pillow...")
                     cmd = [
                         venv_pip, "install", "--timeout", "120",
                         "whisperx",
+                        "imageio-ffmpeg",
                         "customtkinter>=5.2.2",
                         "Pillow",
                     ]
@@ -625,7 +656,22 @@ class SetupWizard:
                 if rc != 0:
                     raise RuntimeError(
                         "pip install failed — see the log above for details.")
-                self._set_progress(0.95)
+                self._set_progress(0.85)
+
+            # ffmpeg — checked independently so it installs even when whisperx
+            # was already cached (handles upgrades from older app versions)
+            if not self._pkg_installed(venv_pip, "imageio-ffmpeg"):
+                self._set_status("Installing ffmpeg (audio decoder)...")
+                self._log("\n[ffmpeg] Installing portable ffmpeg...")
+                rc = self._run_pip([venv_pip, "install", "imageio-ffmpeg",
+                                    "--quiet", "--timeout", "120"])
+                if rc != 0:
+                    raise RuntimeError(
+                        "ffmpeg install failed — see the log above for details.")
+                self._log("\n[ffmpeg] Done.")
+            else:
+                self._log("\n[ffmpeg] Already installed — skipping.")
+            self._set_progress(0.95)
 
             # 4. Mark complete
             flag = os.path.join(runtime, ".setup_complete")

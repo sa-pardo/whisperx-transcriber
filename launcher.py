@@ -28,12 +28,23 @@ def _runtime_python() -> str:
 
 
 def _runtime_ready() -> bool:
-    """Fast check — just look for the flag file written after successful setup."""
+    """Fast check — look for the flag file and verify ffmpeg is reachable."""
     py = os.path.join(_base_dir(), "runtime", "Scripts", "python.exe")
     if not os.path.isfile(py):
         return False
     flag = os.path.join(_base_dir(), "runtime", ".setup_complete")
-    return os.path.isfile(flag)
+    if not os.path.isfile(flag):
+        return False
+    # Ensure ffmpeg is available — bundled via imageio-ffmpeg or on system PATH
+    ffmpeg_binaries = os.path.join(_base_dir(), "runtime", "Lib", "site-packages",
+                                   "imageio_ffmpeg", "binaries")
+    if os.path.isdir(ffmpeg_binaries):
+        return True
+    try:
+        import shutil
+        return bool(shutil.which("ffmpeg"))
+    except Exception:
+        return False
 
 
 def _launch_app() -> None:
@@ -50,6 +61,13 @@ def _launch_app() -> None:
 
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
+
+    # Prepend bundled ffmpeg binaries to PATH so whisperx.load_audio can find ffmpeg
+    ffmpeg_bin = os.path.join(base, "runtime", "Lib", "site-packages",
+                              "imageio_ffmpeg", "binaries")
+    if os.path.isdir(ffmpeg_bin):
+        env["PATH"] = ffmpeg_bin + os.pathsep + env.get("PATH", "")
+
     subprocess.Popen(
         [runtime_py, app_script],
         env=env,

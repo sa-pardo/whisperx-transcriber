@@ -58,6 +58,47 @@ def resolve_compute(t_dev: str, compute: str) -> tuple:
     return compute, False
 
 
+def download_model(model: str, model_dir: str, progress_cb=None) -> None:
+    """
+    Pre-download a faster-whisper model with real progress reporting.
+
+    progress_cb(done_bytes: int, total_bytes: int) is called as bytes arrive.
+    Stores into {model_dir}/hub so a later load_model() finds it cached and
+    does not re-download.  Safe to call even if already cached (no-op).
+
+    Raises on download failure — the caller may fall back to load_model(),
+    which downloads the model itself (without progress).
+    """
+    from huggingface_hub import snapshot_download
+    try:
+        from huggingface_hub.utils import tqdm as _BaseTqdm
+    except Exception:
+        from tqdm.auto import tqdm as _BaseTqdm
+
+    files: dict = {}
+
+    class _ProgressTqdm(_BaseTqdm):
+        def update(self, n=1):
+            ret = super().update(n)
+            try:
+                if progress_cb is not None and self.total:
+                    files[id(self)] = (self.n, self.total)
+                    done  = sum(a for a, _ in files.values())
+                    total = sum(b for _, b in files.values())
+                    progress_cb(done, total)
+            except Exception:
+                pass
+            return ret
+
+    repo = f"Systran/faster-whisper-{model}"
+    cache_dir = os.path.join(model_dir, "hub")
+    try:
+        snapshot_download(repo, cache_dir=cache_dir, tqdm_class=_ProgressTqdm)
+    except TypeError:
+        # Older huggingface_hub without tqdm_class support — download anyway
+        snapshot_download(repo, cache_dir=cache_dir)
+
+
 def load_model(model: str, t_dev: str, compute: str, language, beam: int):
     """Load and return a WhisperX ASR model."""
     import whisperx
