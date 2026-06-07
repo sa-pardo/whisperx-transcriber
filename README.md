@@ -5,6 +5,8 @@
 
 Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the fastest open-source speech recognition stack available. Released to the community as free, open-source software.
 
+![WhisperX Transcriber — Model panel](assets/screenshot.png)
+
 ---
 
 ## Why use this?
