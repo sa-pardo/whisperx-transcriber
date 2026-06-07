@@ -338,27 +338,49 @@ You can select multiple formats at once — all files save to the same folder.
 
 ### Troubleshooting
 
-**"Python not found" / orange warning in the setup wizard**  
-The wizard starts installing Python 3.13 automatically — just wait a moment. If you'd rather install it yourself, go to [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen, then click "Check again" in the wizard.
+#### Setup problems
 
-**Setup stops or fails mid-download**  
-Click **Retry** — the wizard picks up where it left off and skips packages that are already installed.
+**"Python not found" / orange warning on the welcome screen**
+- The wizard installs Python 3.13 automatically — just wait a moment, it starts on its own
+- To install manually instead: go to [python.org/downloads](https://www.python.org/downloads/), tick **"Add Python to PATH"** on the first installer screen, then click **"Check again"** in the wizard
 
-**"CUDA out of memory" during transcription**  
-Go to **Quality** and lower the Speed (batch size) value. Try 8, then 4.
+**Setup stops or fails mid-download**
+- Click **Retry** in the wizard — it picks up where it left off and skips packages already installed
+- If it keeps failing, check your internet connection and try again
 
-**"An Application Control policy has blocked this file" (WinError 4551)**  
-Windows Smart App Control is blocking a native library that the AI engine depends on. To fix it: open **Windows Security → App & browser control → Smart App Control settings** and switch it to **Off**, then restart your laptop and run the app again. If you'd rather not turn it off entirely, add the `WhisperXTranscriber` folder as an exclusion under **Windows Security → Virus & threat protection → Exclusions** instead.
+**"An Application Control policy has blocked this file" (WinError 4551)**
 
-> Note: Smart App Control can only be disabled — it cannot be re-enabled without reinstalling Windows. This is a Windows limitation, not something the app can work around.
+Windows Smart App Control is blocking a native library the AI engine needs. To fix it:
 
-**Word alignment failed**  
-Turn off **Word timestamps** in the Save panel. SRT, VTT, and TXT still export without word-level timing.
+1. Open **Windows Security**
+2. Go to **App & browser control → Smart App Control settings**
+3. Switch it to **Off**
+4. Restart your laptop, then run the app again
 
-**Transcription is very slow**  
-Switch to a smaller model (`small` or `base`) in the Quality panel.
+> **Don't want to turn it off?** Add the `WhisperXTranscriber` folder as an exclusion under **Windows Security → Virus & threat protection → Exclusions** instead.
+>
+> Note: Smart App Control cannot be re-enabled without reinstalling Windows once disabled — this is a Windows limitation, not something the app can work around.
 
-**Something else is wrong**  
+---
+
+#### During transcription
+
+**"CUDA out of memory"**
+- Go to **Quality** and lower the **Speed** (batch size) slider — try 8, then 4
+- Or switch to a smaller model (`medium` or `small`)
+
+**Word alignment failed**
+- Turn off **Word timestamps** in the Save panel
+- SRT, VTT, and TXT still export cleanly without word-level timing
+
+**Transcription is very slow**
+- Switch to a smaller model (`small` or `base`) in the Quality panel
+- If you have an NVIDIA GPU, make sure **Device** is set to **CUDA** in the Quality panel — not CPU
+
+---
+
+#### Still stuck?
+
 Open a [GitHub issue](../../issues) and paste the output from the **Activity** panel — that's the fastest way to get help.
 
 ---
