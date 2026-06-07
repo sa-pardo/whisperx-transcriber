@@ -3,7 +3,7 @@
 > A clean Windows desktop app for AI-powered audio and video transcription.  
 > Word-level timestamps. Works completely offline. No subscription. No cloud. Free forever.
 
-Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the fastest open-source speech recognition stack available.
+Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — some of the fastest, most accurate open-source speech recognition tools available.
 
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%99%A5%20GitHub-ea4aaa?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ibrahimqureshae)
 [![PayPal](https://img.shields.io/badge/Donate-PayPal-0070ba?style=flat&logo=paypal&logoColor=white)](https://www.paypal.me/mibrahimqr)
@@ -86,6 +86,7 @@ Four clean panels — everything is a click away, nothing is buried.
 - Auto-detects your **NVIDIA GPU** and uses CUDA — falls back to CPU automatically
 - Strips silence with a built-in **Voice Activity Detection (VAD)** filter
 - Produces **karaoke-style subtitles** with word-by-word highlighting in SRT/VTT
+- Shows a **live progress bar** while files download, and lets you **cancel** a run at any time
 - Runs **100% offline** after the one-time first-run setup
 
 ---
@@ -196,13 +197,13 @@ start	end	text
 The app is built around one principle: **pay the download cost once, use it forever**.
 
 ```
-First launch  (internet required — one time only)
-  └── Setup Wizard installs the AI engine: torch + whisperX  (~1–3 GB)
-      └── Saved to the runtime/ folder next to the app
+First launch  (internet needed — one time only)
+  └── Setup Wizard installs the AI engine + audio tools  (~1–3 GB)
+      └── Everything is saved in a folder right next to the app
           └── Every launch after this: fully offline, opens instantly
 ```
 
-AI models (e.g. large-v2) are also cached on first use and never re-downloaded. Transcription works with no internet connection at all after that — even on a plane.
+The AI models (like `large-v2`) are also saved the first time you use them, and never downloaded again. After that, transcription works with no internet connection at all — even on a plane.
 
 ---
 
@@ -258,18 +259,22 @@ Head to the [**Releases**](../../releases) tab and grab the latest `WhisperXTran
   <tr>
     <td align="center">
       <img src="assets/screenshots/First_Time_Setup.png" width="360" alt="Setup wizard welcome screen"/><br/>
-      <sub>Your GPU is detected automatically — the right CUDA build is selected for you</sub>
+      <sub>Your graphics card is detected automatically — the right version is set up for you</sub>
     </td>
     <td align="center">
       <img src="assets/screenshots/Setup_Ongoing.png" width="360" alt="Setup wizard installing"/><br/>
-      <sub>torch + WhisperX are downloading — this only ever happens once</sub>
+      <sub>The AI engine downloads with a live progress bar — and this only ever happens once</sub>
     </td>
   </tr>
 </table>
 
-On first launch, the **Setup Wizard** opens and handles everything — including Python if it's not already on your machine. If Python isn't found, the wizard starts downloading and installing Python 3.13 automatically after a brief pause. No clicks, no manual steps needed.
+On first launch, a **Setup Wizard** opens and does all the heavy lifting for you. It installs everything the app needs to run:
 
-Once Python is ready, the wizard downloads the AI engine (1–3 GB). This is a one-time step. Every launch after this opens instantly.
+- **The AI engine** — the part that actually does the transcribing (~1–3 GB)
+- **Audio tools** — needed to read your audio and video files (installed automatically)
+- **Python** — the software the engine runs on (only installed if you don't already have it)
+
+You don't have to make any choices or click through anything — it just runs. A **live progress bar shows exactly how much has downloaded and how much is left**, so you're never left guessing. This whole step happens only once; every launch after this opens instantly.
 
 > [!TIP]
 > Prefer to install Python yourself? Get it from [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen.
@@ -370,6 +375,11 @@ Windows Smart App Control is blocking a native library the AI engine needs. To f
 
 #### During transcription
 
+**"The system cannot find the file specified" (WinError 2)**
+- This means the audio tools (FFmpeg) are missing — older versions didn't bundle them
+- **Update to the latest version** from the [Releases](../../releases) page, then run it again
+- The setup wizard now installs FFmpeg for you automatically (no re-download of the AI engine needed)
+
 **"CUDA out of memory"**
 - Go to <kbd>Quality</kbd> and lower the **Speed** (batch size) slider — try 8, then 4
 - Or switch to a smaller model (`medium` or `small`)
@@ -448,7 +458,7 @@ The distributed `.exe` is intentionally tiny (~19 MB) — it contains **no AI pa
 WhisperXTranscriber.exe  (PyInstaller onedir)
   └── Python runtime + customtkinter + Pillow  (GUI shell only)
   └── setup_wizard  (frozen inside the exe)
-      └── First run  →  pip-installs torch + whisperx into runtime/
+      └── First run  →  pip-installs torch + whisperx + ffmpeg into runtime/
           └── All later runs  →  spawns runtime/python.exe app.py
 ```
 
@@ -493,10 +503,16 @@ python transcribe.py audio.mp3 --model-dir D:\models
 
 This project is built and maintained by a single developer — a working student engineer doing part-time research. Development happens in spare time, but the vision is clear and the roadmap is real.
 
+### Recently shipped
+
+- ✅ **Automatic FFmpeg setup** — audio tools now install themselves, fixing a "file not found" error some users hit
+- ✅ **Real-time download progress** — every download (Python, AI engine, models) shows a live progress bar with megabytes and percentage
+- ✅ **Cancel any time** — stop a transcription or download mid-run without closing the app
+- ✅ **Automatic Python install** — the wizard sets up Python for you if it's missing
+
 ### Up next
 
-- **Cancel button** — stop a transcription mid-run without closing the app
-- **Real progress tracking** — show percentage complete instead of an indeterminate bar
+- **Live progress while transcribing** — a percent-complete bar for the transcription step itself (downloads already show real-time progress)
 - **macOS `.app` bundle** — a proper portable build for Mac, same thin-launcher pattern
 
 ### On the roadmap
@@ -589,6 +605,7 @@ Open an [issue](../../issues) to report a bug or suggest a feature. Open a pull 
 | Transcription | [WhisperX](https://github.com/m-bain/whisperX) |
 | ASR backend | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
 | Inference runtime | [CTranslate2](https://github.com/OpenNMT/CTranslate2) |
+| Audio / video decoding | [FFmpeg](https://ffmpeg.org/) (via imageio-ffmpeg) |
 | Packaging | [PyInstaller](https://pyinstaller.org/) |
 
 ---
