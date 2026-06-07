@@ -1,9 +1,9 @@
 # WhisperX Transcriber
 
 > A clean Windows desktop app for AI-powered audio and video transcription.  
-> Word-level timestamps. Works completely offline. No subscription. No cloud.
+> Word-level timestamps. Works completely offline. No subscription. No cloud. Free forever.
 
-Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the fastest open-source speech recognition stack available.
+Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the fastest open-source speech recognition stack available. Released to the community as free, open-source software.
 
 ---
 
@@ -17,6 +17,7 @@ Most transcription tools are either expensive cloud services that send your audi
 - **Fast.** On a modern NVIDIA GPU, it transcribes faster than realtime. Even on CPU it's practical for short and medium recordings.
 - **Accurate.** Powered by OpenAI's Whisper large-v2 model — one of the best open-source speech recognition models available.
 - **Word-level timestamps.** Every word is timestamped precisely, not just sentence segments. Essential for subtitle work, content search, and downstream processing.
+- **Open source and auditable.** The full source code is public. You can see exactly what the app does — no telemetry, no hidden network calls, no surprises.
 
 ---
 
@@ -331,27 +332,43 @@ Output: `dist/release/WhisperXTranscriber.zip`
 
 ---
 
-## Open source — contributions welcome
+## Free and open source
 
-WhisperX Transcriber is free and open source under the MIT license. The source code is fully available and the project welcomes contributions of any kind.
+WhisperX Transcriber exists because powerful AI tools should be accessible to everyone — not locked behind expensive subscriptions or a command line that most people will never open.
+
+The app is built entirely on open-source foundations: OpenAI's Whisper model, the WhisperX alignment layer, faster-whisper's inference engine, and customtkinter's GUI framework. Every component is free, community-built, and publicly auditable. This project wraps them into something anyone can use with zero technical knowledge, and releases the result back to the community under the MIT license — free to use, modify, fork, and build on, forever.
+
+**The source code is fully open:**
+
+- No telemetry, no tracking, no hidden network calls
+- You can read every line of code that runs on your machine
+- Fork it, modify it, redistribute it — the license allows all of it
+
+---
+
+## Contributing
+
+Contributions are genuinely welcome. Whether you're fixing a bug, improving the UI, adding a language, or just reporting an issue — it all helps.
 
 **Ways to contribute:**
 
 - **Bug reports** — open an [issue](../../issues) with the log output and steps to reproduce
-- **Feature requests** — open an issue describing the use case
+- **Feature requests** — open an issue describing the use case and why it matters
 - **Code contributions** — fork the repo, make your changes, open a pull request
-- **Language support** — add more languages to the `_lang_map` in `app.py`
-- **Testing** — test on different hardware, GPUs, or audio types and report findings
+- **Language support** — add entries to the `_lang_map` dict in `app.py` (one line per language)
+- **Testing** — test on different hardware, Windows versions, or audio types and share findings
 
-**Getting started as a contributor:**
+**Getting started:**
 
 ```bash
 git clone https://github.com/ibrahimqureshae/whisperx-transcriber.git
 cd whisperx-transcriber
-run.bat   # sets up the dev environment and launches the app
+run.bat   # creates .venv, installs everything, launches the app
 ```
 
-The codebase is intentionally small and readable — `app.py` is the entire GUI, `setup_wizard.py` is the first-run installer, `transcribe.py` is the headless CLI. No framework magic, no hidden complexity.
+The codebase is intentionally small and readable. `app.py` is the entire GUI (~1000 lines), `setup_wizard.py` is the first-run installer, `transcribe.py` is the headless CLI. No framework magic, no hidden abstractions — a new contributor can understand the whole project in an afternoon.
+
+---
 
 ## License
 
