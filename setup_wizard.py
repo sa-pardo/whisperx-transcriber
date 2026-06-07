@@ -77,17 +77,26 @@ def _cuda_torch_index() -> str | None:
         return None
 
 
+_COMPAT_MINORS = (10, 11, 12, 13)   # Python 3.x versions with full wheel support
+
+
 def _py_version_ok(version_output: str) -> bool:
-    """Return True if version string is Python 3.10 or newer."""
+    """Return True if version string is a compatible Python (3.10–3.13)."""
     import re
     m = re.search(r"Python 3\.(\d+)", version_output)
-    return bool(m and int(m.group(1)) >= 10)
+    return bool(m and int(m.group(1)) in _COMPAT_MINORS)
 
 
 def _find_python() -> str | None:
-    """Return path to system Python 3.10+, or None."""
-    candidates = ["python", "python3", "python3.14", "python3.13",
-                  "python3.12", "python3.11", "python3.10"]
+    """Return path to a compatible system Python (3.10–3.13), or None.
+
+    Python 3.14+ is excluded — ctranslate2/faster-whisper/whisperx do not
+    yet publish wheels for it.  If the system only has 3.14+, the wizard
+    will auto-download Python 3.13 instead.
+    """
+    # Check specific version commands first (3.13 preferred), then generic
+    candidates = ["python3.13", "python3.12", "python3.11", "python3.10",
+                  "python3", "python"]
     for cmd in candidates:
         path = shutil.which(cmd)
         if not path:
@@ -126,7 +135,14 @@ def _find_python_fresh() -> str | None:
     for pat in patterns:
         candidates.extend(glob.glob(pat))
 
-    for path in sorted(candidates, reverse=True):  # newest version first
+    def _sort_key(p: str):
+        import re
+        m = re.search(r"Python3(\d+)", p, re.IGNORECASE)
+        minor = int(m.group(1)) if m else 0
+        # Only accept compatible minors; prefer 3.13 → 3.12 → 3.11 → 3.10
+        return (0 if minor in _COMPAT_MINORS else 1, -minor)
+
+    for path in sorted(candidates, key=_sort_key):
         try:
             r = subprocess.run(
                 [path, "--version"], capture_output=True, text=True,
@@ -239,15 +255,15 @@ class SetupWizard:
             py_text  = f"●  Python found: {self.python_path}"
             py_color = "#22cc66"
         else:
-            py_text  = "●  Python 3.10+ not found — required for setup"
-            py_color = "#ff4d4d"
+            py_text  = "●  Python 3.13 not found — will be installed automatically"
+            py_color = "#ffaa00"
 
         ctk.CTkLabel(pcard, text=py_text, font=_F(11),
                      text_color=py_color).grid(row=0, column=0, padx=16, pady=10, sticky="w")
 
         if not self.python_path:
             ctk.CTkLabel(pcard,
-                         text="Install Python 3.10+ from python.org — tick 'Add Python to PATH', then click 'Check again'",
+                         text="Python 3.13 will be downloaded and installed automatically.",
                          font=_F(10), text_color=_HINT,
                          ).grid(row=1, column=0, padx=16, pady=(0, 10), sticky="w")
 
@@ -258,16 +274,12 @@ class SetupWizard:
                           command=self._start_install,
                           ).grid(row=0, column=0, pady=13, padx=18, sticky="e")
         else:
-            self.ftr.grid_columnconfigure(0, weight=1)
-            ctk.CTkButton(self.ftr, text="Check again", width=130, height=40,
-                          font=_F(12), fg_color=("#d0d0d0", "#2a2a2a"),
-                          hover_color=("#c0c0c0", "#3a3a3a"), text_color=_PRI,
-                          command=self._check_python_again,
-                          ).grid(row=0, column=1, pady=13, padx=(0, 8))
-            ctk.CTkButton(self.ftr, text="Install Python automatically", width=220, height=40,
-                          font=_F(13, "bold"), fg_color="#4a9eff", hover_color="#6ab0ff",
-                          command=self._auto_install_python,
-                          ).grid(row=0, column=2, pady=13, padx=(0, 18))
+            ctk.CTkLabel(self.ftr,
+                         text="Python 3.13 not found — installing automatically...",
+                         font=_F(11), text_color=_HINT,
+                         ).grid(row=0, column=0, pady=18, padx=18)
+            # Auto-start after a brief pause so the user can read the screen
+            self.win.after(2000, self._auto_install_python)
 
 
     def _check_python_again(self):
@@ -523,8 +535,25 @@ class SetupWizard:
             venv_py  = os.path.join(runtime, "Scripts", "python.exe")
             venv_pip = os.path.join(runtime, "Scripts", "pip.exe")
 
-            # 1. Create venv (skip if already exists)
-            if not os.path.isfile(venv_py):
+            # 1. Create venv — recreate if it exists but was built with an
+            #    incompatible Python version (e.g. 3.14 has no ctranslate2 wheel)
+            def _venv_minor() -> int:
+                try:
+                    r = subprocess.run(
+                        [venv_py, "-c", "import sys; print(sys.version_info.minor)"],
+                        capture_output=True, text=True, timeout=5,
+                        creationflags=subprocess.CREATE_NO_WINDOW)
+                    return int(r.stdout.strip())
+                except Exception:
+                    return 0
+
+            needs_create = not os.path.isfile(venv_py)
+            if not needs_create and _venv_minor() >= 14:
+                self._log("Existing venv uses Python 3.14+ — recreating with compatible version.\n")
+                shutil.rmtree(runtime, ignore_errors=True)
+                needs_create = True
+
+            if needs_create:
                 self._set_status("Creating virtual environment...")
                 self._log(f"Creating venv at: {runtime}\n")
                 r = subprocess.run([py, "-m", "venv", runtime],
@@ -549,9 +578,11 @@ class SetupWizard:
             #    else (whisperx, customtkinter, ...).  One torch download, no swap.
             #    CPU path: plain PyPI install.
             #
-            #    TORCH_VERSION must satisfy whisperx's pinned requirement.
-            #    Update this if whisperx bumps its torch pin.
-            TORCH_VERSION = "2.8.0"
+            #    Minimum torch version — pip will pick the latest available
+            #    wheel for the current Python version.  Using >= instead of ==
+            #    so new Python versions (3.14+) aren't blocked by missing exact
+            #    wheels on the pytorch index.
+            TORCH_MIN = "2.8.0"
 
             if self._pkg_installed(venv_pip, "whisperx"):
                 self._log("\n[All packages] Already installed — skipping.")
@@ -565,11 +596,11 @@ class SetupWizard:
                     self._set_status(
                         "Downloading AI engine and dependencies (1–3 GB, CUDA)...")
                     self._log(
-                        f"\n[Installing] torch {TORCH_VERSION}+CUDA, whisperx, deps...")
+                        f"\n[Installing] torch>={TORCH_MIN}+CUDA, whisperx, deps...")
                     cmd = [
                         venv_pip, "install", "--timeout", "120",
-                        f"torch=={TORCH_VERSION}",
-                        f"torchaudio=={TORCH_VERSION}",
+                        f"torch>={TORCH_MIN}",
+                        f"torchaudio>={TORCH_MIN}",
                         "whisperx",
                         "customtkinter>=5.2.2",
                         "Pillow",

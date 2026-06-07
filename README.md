@@ -268,7 +268,7 @@ Head to the [**Releases**](../../releases) tab and grab the latest `WhisperXTran
   </tr>
 </table>
 
-On first launch, the **Setup Wizard** opens and handles everything — including Python if it's not already on your machine. Just click **"Install Python automatically"** and the wizard downloads and installs it for you with the right settings. No manual steps needed.
+On first launch, the **Setup Wizard** opens and handles everything — including Python if it's not already on your machine. If Python isn't found, the wizard starts downloading and installing Python 3.13 automatically after a brief pause. No clicks, no manual steps needed.
 
 Once Python is ready, the wizard downloads the AI engine (1–3 GB). This is a one-time step. Every launch after this opens instantly.
 
@@ -329,8 +329,8 @@ You can select multiple formats at once — all files save to the same folder.
 
 ### Troubleshooting
 
-**"Python not found" / red warning in the setup wizard**  
-Click **"Install Python automatically"** — the wizard will download and install it for you. If you prefer to do it manually, go to [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen, then click "Check again" in the wizard.
+**"Python not found" / orange warning in the setup wizard**  
+The wizard starts installing Python 3.13 automatically — just wait a moment. If you'd rather install it yourself, go to [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen, then click "Check again" in the wizard.
 
 **Setup stops or fails mid-download**  
 Click **Retry** — the wizard picks up where it left off and skips packages that are already installed.
