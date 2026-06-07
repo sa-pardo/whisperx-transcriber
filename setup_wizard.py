@@ -43,6 +43,35 @@ def _has_nvidia() -> bool:
         return False
 
 
+def _cuda_torch_index() -> str | None:
+    """
+    Return the PyTorch wheel index URL for the detected CUDA driver, or None
+    if no NVIDIA GPU is present.  Maps driver CUDA version → nearest PyTorch
+    CUDA suffix (driver is always forward-compatible with older toolkits).
+    """
+    try:
+        import re
+        r = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=6)
+        if r.returncode != 0:
+            return None
+        m = re.search(r"CUDA Version:\s*(\d+)\.(\d+)", r.stdout)
+        if not m:
+            return None
+        major, minor = int(m.group(1)), int(m.group(2))
+        version = major * 10 + minor  # e.g. 12.8 → 128, 12.1 → 121
+        if version >= 126:
+            suffix = "cu128"
+        elif version >= 121:
+            suffix = "cu124"
+        elif version >= 118:
+            suffix = "cu118"
+        else:
+            return None  # too old, fall back to CPU
+        return f"https://download.pytorch.org/whl/{suffix}"
+    except Exception:
+        return None
+
+
 def _find_python() -> str | None:
     """Return path to system Python 3.10+, or None."""
     candidates = ["python", "python3", "python3.13", "python3.12",
@@ -71,6 +100,7 @@ class SetupWizard:
         self.on_complete = on_complete
         self.runtime_dir = os.path.join(base_dir, "runtime")
         self.has_gpu     = _has_nvidia()
+        self.torch_index = _cuda_torch_index()
         self.python_path = _find_python()
         self._q: queue.Queue[tuple[str, str]] = queue.Queue()
 
@@ -140,9 +170,16 @@ class SetupWizard:
         gcard.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         gcard.grid_columnconfigure(0, weight=1)
 
-        gpu_label = ("●  NVIDIA GPU detected — GPU acceleration will be used"
-                     if self.has_gpu else "●  No GPU detected — will run on CPU")
-        gpu_color = "#22cc66" if self.has_gpu else "#888888"
+        if self.has_gpu and self.torch_index:
+            suffix = self.torch_index.rstrip("/").split("/")[-1].upper()
+            gpu_label = f"●  NVIDIA GPU detected — CUDA build will be installed ({suffix})"
+            gpu_color = "#22cc66"
+        elif self.has_gpu:
+            gpu_label = "●  NVIDIA GPU detected — CUDA version too old, using CPU build"
+            gpu_color = "#ffaa00"
+        else:
+            gpu_label = "●  No GPU detected — will run on CPU"
+            gpu_color = "#888888"
         ctk.CTkLabel(gcard, text=gpu_label, font=_F(12, "bold"),
                      text_color=gpu_color).grid(row=0, column=0, padx=16, pady=12, sticky="w")
 
@@ -271,6 +308,11 @@ class SetupWizard:
         self._set_progress(next_val)
         if next_val < target:
             self.win.after(1000, lambda: self._animate_progress(next_val, target))
+        else:
+            # Ceiling reached — switch to indeterminate so it's clear we're still working
+            if hasattr(self, "_prog"):
+                self.win.after(0, lambda: self._prog.configure(mode="indeterminate"))
+                self.win.after(0, self._prog.start)
 
     # ── Install logic ─────────────────────────────────────────────────────────
 
@@ -339,28 +381,60 @@ class SetupWizard:
                            "--upgrade", "pip", "--quiet", "--timeout", "120"])
             self._set_progress(0.10)
 
-            # 3. Install everything in one pass — whisperx pulls the correct
-            #    torch version directly, avoiding a redundant download.
+            # 3. Install all packages in one pip call.
+            #    GPU path: pytorch.org is the primary index so torch/torchaudio
+            #    resolve to the CUDA build; PyPI is the fallback for everything
+            #    else (whisperx, customtkinter, ...).  One torch download, no swap.
+            #    CPU path: plain PyPI install.
+            #
+            #    TORCH_VERSION must satisfy whisperx's pinned requirement.
+            #    Update this if whisperx bumps its torch pin.
+            TORCH_VERSION = "2.8.0"
+
             if self._pkg_installed(venv_pip, "whisperx"):
                 self._log("\n[All packages] Already installed — skipping.")
                 self._set_progress(0.95)
             else:
-                self._set_status("Downloading AI engine and dependencies (1–3 GB, up to 5 GB on disk)...")
-                self._log("\n[Installing] whisperx + torch + all dependencies...")
+                torch_index = _cuda_torch_index()
                 self._install_done = False
                 self.win.after(1000, lambda: self._animate_progress(0.10, 0.89))
-                rc = self._run_pip([venv_pip, "install",
-                                    "--timeout", "120",
-                                    "whisperx",
-                                    "customtkinter>=5.2.2",
-                                    "Pillow"])
+
+                if torch_index:
+                    self._set_status(
+                        "Downloading AI engine and dependencies (1–3 GB, CUDA)...")
+                    self._log(
+                        f"\n[Installing] torch {TORCH_VERSION}+CUDA, whisperx, deps...")
+                    cmd = [
+                        venv_pip, "install", "--timeout", "120",
+                        f"torch=={TORCH_VERSION}",
+                        f"torchaudio=={TORCH_VERSION}",
+                        "whisperx",
+                        "customtkinter>=5.2.2",
+                        "Pillow",
+                        "--index-url", torch_index,
+                        "--extra-index-url", "https://pypi.org/simple/",
+                    ]
+                else:
+                    self._set_status(
+                        "Downloading AI engine and dependencies (1–3 GB)...")
+                    self._log("\n[Installing] whisperx + customtkinter + Pillow...")
+                    cmd = [
+                        venv_pip, "install", "--timeout", "120",
+                        "whisperx",
+                        "customtkinter>=5.2.2",
+                        "Pillow",
+                    ]
+
+                rc = self._run_pip(cmd)
                 self._install_done = True
+                if hasattr(self, "_prog"):
+                    self.win.after(0, lambda: self._prog.configure(mode="determinate"))
                 if rc != 0:
                     raise RuntimeError(
                         "pip install failed — see the log above for details.")
                 self._set_progress(0.95)
 
-            # 5. Mark complete
+            # 4. Mark complete
             flag = os.path.join(runtime, ".setup_complete")
             with open(flag, "w") as fh:
                 fh.write("ok")

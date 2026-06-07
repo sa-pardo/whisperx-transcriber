@@ -5,7 +5,9 @@
 
 Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the fastest open-source speech recognition stack available. Released to the community as free, open-source software.
 
-![WhisperX Transcriber — Model panel](assets/screenshot.png)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%99%A5%20GitHub-ea4aaa?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ibrahimqureshae)
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-0070ba?style=flat&logo=paypal&logoColor=white)](https://www.paypal.me/mibrahimqr)
+[![GitHub Stars](https://img.shields.io/github/stars/ibrahimqureshae/whisperx-transcriber?style=flat&logo=github&label=Stars)](https://github.com/ibrahimqureshae/whisperx-transcriber/stargazers)
 
 ---
 
@@ -27,7 +29,7 @@ Most transcription tools are either expensive cloud services that send your audi
 
 - Transcribes **audio and video files** to text with word-level timestamps
 - Exports to **SRT, VTT, TXT, TSV, JSON**, or a custom **Word JSON** format
-- Supports **17 languages** in the GUI, **99 languages** via the CLI
+- Supports **20 languages** in the GUI, **99 languages** via the CLI
 - Auto-detects your **NVIDIA GPU** for fast transcription, falls back to CPU automatically
 - Strips silence automatically with a built-in **VAD (Voice Activity Detection)** filter
 - Produces **karaoke-style highlighted subtitles** (word-by-word highlighting in SRT/VTT)
@@ -52,7 +54,7 @@ The AI **models** (e.g. large-v2) also download once on first use and are cached
 
 ## Supported languages
 
-The GUI exposes **17 languages** with a dropdown:
+The GUI exposes **20 languages** with a dropdown:
 
 | Language | Code | Language | Code |
 |---|---|---|---|
@@ -64,7 +66,8 @@ The GUI exposes **17 languages** with a dropdown:
 | Chinese | `zh` | Turkish | `tr` |
 | Japanese | `ja` | Persian | `fa` |
 | Korean | `ko` | Urdu | `ur` |
-| Hindi | `hi` | | |
+| Hindi | `hi` | Georgian | `ka` |
+| Pashto | `ps` | | |
 
 The **Auto-detect** option lets Whisper identify the language automatically — useful when you're not sure or the audio contains multiple languages.
 
@@ -119,10 +122,10 @@ On first launch, the **Setup Wizard** opens automatically:
 
 ### Step 4 — Transcribe
 
-1. Click **Files** and select your audio or video file
-2. Go to **Model** to choose model size and device
-3. Go to **Output** to choose your export formats
-4. Click **Run**
+1. Click **Transcribe** and select your audio or video file
+2. Go to **Quality** to choose model size and device
+3. Go to **Save** to choose your export formats
+4. Click **Transcribe**
 
 The status bar shows each phase: Downloading model → Loading model → Loading audio → Transcribing → Aligning → Saving → Done.
 
@@ -136,7 +139,7 @@ The status bar shows each phase: Downloading model → Loading model → Loading
 | Transcription speed | ~0.3–0.5× realtime | ~8–15× realtime |
 | Hardware required | Any Windows PC | NVIDIA GPU + driver 525+ |
 
-The wizard detects your GPU automatically. You can override the device in the **Model** panel.
+The wizard detects your GPU automatically. You can override the device in the **Quality** panel.
 
 ---
 
@@ -178,13 +181,13 @@ Multiple formats can be selected at once. All are saved to the same output folde
 
 **Setup fails mid-download** — Click **Retry**. The wizard resumes where it left off and skips already-installed packages.
 
-**CUDA out of memory** — Lower Batch Size in the Model panel. Try 8, then 4.
+**CUDA out of memory** — Lower Batch Size in the Quality panel. Try 8, then 4.
 
-**Alignment fails** — Disable word alignment in the Output panel. All other formats (SRT, VTT, TXT, etc.) still export without it.
+**Alignment fails** — Disable word alignment in the Save panel. All other formats (SRT, VTT, TXT, etc.) still export without it.
 
 **Transcription is slow on CPU** — Use a smaller model (`small` or `base`), or reduce Batch Size.
 
-**Anything else** — Open a [GitHub issue](../../issues) and paste the log output (click **Log** in the sidebar).
+**Anything else** — Open a [GitHub issue](../../issues) and paste the log output (click **Activity** in the sidebar).
 
 ---
 
@@ -198,7 +201,7 @@ Multiple formats can be selected at once. All are saved to the same output folde
 
 - Python 3.10, 3.11, 3.12, or 3.13
 - Git
-- Windows (Linux/macOS supported via `run.sh`, GUI features may vary)
+- Windows (macOS support planned — see roadmap)
 - NVIDIA GPU recommended but not required
 
 ### Quick start
@@ -207,11 +210,9 @@ Multiple formats can be selected at once. All are saved to the same output folde
 git clone https://github.com/ibrahimqureshae/whisperx-transcriber.git
 cd whisperx-transcriber
 run.bat          # Windows
-# or
-bash run.sh      # macOS / Linux
 ```
 
-`run.bat` / `run.sh` does everything on first run:
+`run.bat` does everything on first run:
 
 1. Creates a `.venv` virtual environment
 2. Detects your GPU and installs the correct PyTorch build
@@ -230,17 +231,19 @@ whisperx-transcriber/
 ├── setup_wizard.py         First-run wizard (runs inside the packaged .exe)
 ├── transcribe.py           Headless CLI tool for scripting and batch use
 │
-├── run.bat                 Windows developer launcher
-├── run.sh                  macOS / Linux developer launcher
+├── core/
+│   └── pipeline.py         All WhisperX pipeline logic, no GUI dependencies
 │
-├── requirements-cpu.txt    PyTorch CPU wheels
-├── requirements-gpu.txt    PyTorch CUDA wheels
-├── requirements-core.txt   whisperx, customtkinter, Pillow
-├── requirements-build.txt  Build tools (pyinstaller)
+├── run.bat                 Windows developer launcher
+│
+├── requirements-build.txt  Build + test tools (pyinstaller, pytest, jiwer)
 │
 ├── packaging/
 │   ├── build.bat           Builds the thin launcher exe + creates portable zip
 │   └── launcher.spec       PyInstaller spec — GUI only, no ML packages
+│
+├── tests/
+│   └── test_pipeline.py    Unit + WER tests for core pipeline
 │
 └── assets/
     └── icon.ico            App icon
@@ -261,22 +264,14 @@ WhisperXTranscriber.exe  (PyInstaller onedir)
 
 This avoids bundling gigabytes of ML libraries into the exe, and means updates to the AI engine don't require a new download of the whole app.
 
-### Manual install (without run.bat)
+### Building the release zip
 
 ```bash
-python -m venv .venv
-
-# GPU (NVIDIA)
-.venv\Scripts\pip install -r requirements-gpu.txt
-# CPU only
-.venv\Scripts\pip install -r requirements-cpu.txt
-
-# App dependencies
-.venv\Scripts\pip install -r requirements-core.txt
-
-# Launch
-.venv\Scripts\python app.py
+# Requires .venv to exist (run run.bat once first)
+packaging\build.bat
 ```
+
+Output: `dist/release/WhisperXTranscriber.zip`
 
 ### CLI usage (transcribe.py)
 
@@ -289,48 +284,53 @@ python transcribe.py audio.mp3 --device cpu --output srt
 python transcribe.py audio.mp3 --model-dir D:\models
 ```
 
-Options:
-
-```
---model       tiny, base, small, medium, large-v2, large-v3  (default: large-v2)
---language    any ISO 639-1 code, e.g. en, ar, fr, ur, fa    (default: auto-detect)
---device      cuda, cpu                                       (default: auto-detect)
---output      word_json, srt, vtt, txt, tsv, json            (default: word_json)
---model-dir   path to model cache                            (default: ./Models)
-```
-
-### Building the release zip
-
-See [PACKAGING.md](PACKAGING.md) for the full guide. Quick version:
-
-```bash
-# Requires .venv to exist (run run.bat once first)
-packaging\build.bat
-```
-
-Output: `dist/release/WhisperXTranscriber.zip`
-
 ---
 
 ---
-
-## Tech stack
-
-| Layer | Library |
-|---|---|
-| GUI | [customtkinter](https://github.com/TomSchimansky/CustomTkinter) |
-| Transcription | [WhisperX](https://github.com/m-bain/whisperX) |
-| ASR backend | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
-| Inference runtime | [CTranslate2](https://github.com/OpenNMT/CTranslate2) |
-| Packaging | [PyInstaller](https://pyinstaller.org/) |
 
 ## Roadmap
 
-- [ ] Drag-and-drop file input
-- [ ] Batch folder transcription
-- [ ] Speaker diarization UI
-- [ ] Translation mode (transcribe + translate to English)
-- [ ] macOS `.app` bundle
+This project is built and maintained by a single developer — a working student engineer doing part-time research. Development happens in spare time, but the vision is clear and the momentum is real. Here's where it's going:
+
+### Coming next
+
+- **Cancel button** — stop a transcription mid-run without closing the app
+- **Real progress tracking** — percentage-based progress instead of indeterminate animation
+- **macOS `.app` bundle** — a proper portable build for Mac users (same thin-launcher pattern)
+
+### Planned features
+
+- **Drag-and-drop** file input directly onto the window
+- **Batch folder transcription** — drop a folder, transcribe everything in it as a queue
+- **Speaker diarization** — identify who said what, with per-speaker labels in the output
+- **Translation mode** — transcribe and translate to English in one pass
+- **Custom vocabulary** — prime the model with domain-specific terms for better accuracy
+- **Auto-update check** — get notified when a new version is available
+
+### Longer term
+
+- **Linux AppImage** — after macOS is stable
+- **Local crash logs** — rotating log file so errors are never silently lost
+- **Community language packs** — contributed alignment models for additional languages
+
+> If any of these matter to you, the best way to make them happen faster is to [support the project](#support-the-project) or open an issue describing your use case.
+
+---
+
+## Support the Project
+
+This app is completely free and always will be. But building and maintaining it takes real time — time that competes with coursework, research, and everything else that comes with being a student.
+
+If WhisperX Transcriber has been useful to you, consider supporting it:
+
+| | |
+|---|---|
+| **GitHub Sponsors** | [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%99%A5-ea4aaa?style=flat&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/ibrahimqureshae) Monthly or one-time, directly through GitHub |
+| **PayPal** | [![Donate](https://img.shields.io/badge/Donate-PayPal-0070ba?style=flat&logo=paypal&logoColor=white)](https://www.paypal.me/mibrahimqr) One-time donation, any amount |
+| **Star the repo** | [![Stars](https://img.shields.io/github/stars/ibrahimqureshae/whisperx-transcriber?style=flat&logo=github)](https://github.com/ibrahimqureshae/whisperx-transcriber/stargazers) Free, takes two seconds, helps discoverability |
+| **Share it** | Tell a colleague, post in a community, recommend it to someone who needs it |
+
+Every contribution — financial or otherwise — directly enables more development time and faster feature delivery.
 
 ---
 
@@ -360,15 +360,19 @@ Contributions are genuinely welcome. Whether you're fixing a bug, improving the 
 - **Language support** — add entries to the `_lang_map` dict in `app.py` (one line per language)
 - **Testing** — test on different hardware, Windows versions, or audio types and share findings
 
-**Getting started:**
+The codebase is intentionally small and readable. `app.py` is the entire GUI, `core/pipeline.py` is all the AI logic, `setup_wizard.py` is the first-run installer. No framework magic, no hidden abstractions — a new contributor can understand the whole project in an afternoon.
 
-```bash
-git clone https://github.com/ibrahimqureshae/whisperx-transcriber.git
-cd whisperx-transcriber
-run.bat   # creates .venv, installs everything, launches the app
-```
+---
 
-The codebase is intentionally small and readable. `app.py` is the entire GUI (~1000 lines), `setup_wizard.py` is the first-run installer, `transcribe.py` is the headless CLI. No framework magic, no hidden abstractions — a new contributor can understand the whole project in an afternoon.
+## Tech stack
+
+| Layer | Library |
+|---|---|
+| GUI | [customtkinter](https://github.com/TomSchimansky/CustomTkinter) |
+| Transcription | [WhisperX](https://github.com/m-bain/whisperX) |
+| ASR backend | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
+| Inference runtime | [CTranslate2](https://github.com/OpenNMT/CTranslate2) |
+| Packaging | [PyInstaller](https://pyinstaller.org/) |
 
 ---
 

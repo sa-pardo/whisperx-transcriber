@@ -6,6 +6,26 @@ import os
 import json
 
 
+def format_srt_timestamp(seconds: float) -> str:
+    """Convert a float number of seconds to SRT timestamp format: HH:MM:SS,mmm"""
+    assert seconds >= 0, f"Timestamp must be non-negative, got {seconds}"
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    ms = round((seconds % 1) * 1000)
+    # Handle rounding up to a full second
+    if ms == 1000:
+        ms = 0
+        secs += 1
+        if secs == 60:
+            secs = 0
+            minutes += 1
+            if minutes == 60:
+                minutes = 0
+                hours += 1
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+
+
 def detect_device(requested: str) -> tuple:
     """
     Returns (device, t_dev, a_dev).

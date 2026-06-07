@@ -4,6 +4,8 @@ import json
 import queue
 import threading
 import traceback
+import subprocess
+import webbrowser
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
@@ -314,10 +316,10 @@ class App(ctk.CTk):
 
         self._nav_btns = {}
         for i, (key, label) in enumerate([
-            ("Files",    "  Files"),
-            ("Model",    "  Model"),
-            ("Output",   "  Output"),
-            ("Advanced", "  Advanced"),
+            ("Files",    "  Transcribe"),
+            ("Model",    "  Quality"),
+            ("Output",   "  Save"),
+            ("Advanced", "  Settings"),
         ], start=2):
             btn = ctk.CTkButton(
                 sb, text=label, anchor="w", font=F(13), height=40,
@@ -332,12 +334,19 @@ class App(ctk.CTk):
             row=7, column=0, sticky="ew", padx=16, pady=(14, 10))
 
         self._log_btn = ctk.CTkButton(
-            sb, text="  Log", anchor="w", font=F(13), height=40,
+            sb, text="  Activity", anchor="w", font=F(13), height=40,
             corner_radius=9, fg_color="transparent",
             hover_color=_NAVHOV, text_color=_PRI,
             command=self._toggle_log,
         )
         self._log_btn.grid(row=8, column=0, sticky="ew", padx=10, pady=1)
+
+        ctk.CTkButton(
+            sb, text="  ♥  Support", anchor="w", font=F(12), height=36,
+            corner_radius=9, fg_color="transparent",
+            hover_color=_NAVHOV, text_color=("#c44569", "#e05c8a"),
+            command=self._show_support,
+        ).grid(row=9, column=0, sticky="ew", padx=10, pady=(1, 0))
 
         ctk.CTkFrame(sb, fg_color="transparent").grid(row=10, column=0,
                                                       sticky="nsew")
@@ -377,13 +386,16 @@ class App(ctk.CTk):
         self._log_wrap.grid(row=1, column=0, sticky="ew")
         self._log_wrap.grid_propagate(False)
         self._log_wrap.grid_columnconfigure(0, weight=1)
-        self._log_wrap.grid_rowconfigure(1, weight=1)
+        self._log_wrap.grid_rowconfigure(2, weight=1)
 
-        lh = ctk.CTkFrame(self._log_wrap, fg_color=_LOGHDR,
+        ctk.CTkFrame(self._log_wrap, height=1, fg_color=_SEP,
+                     corner_radius=0).grid(row=0, column=0, sticky="ew")
+
+        lh = ctk.CTkFrame(self._log_wrap, fg_color=_BAR,
                           corner_radius=0, height=28)
-        lh.grid(row=0, column=0, sticky="ew")
+        lh.grid(row=1, column=0, sticky="ew")
         lh.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(lh, text="  LOG", font=F(9, "bold"),
+        ctk.CTkLabel(lh, text="  ACTIVITY", font=F(9, "bold"),
                      text_color=_LOG_H).grid(row=0, column=0, sticky="w",
                                               pady=5)
         ctk.CTkButton(lh, text="Clear", width=52, height=22, font=F(10),
@@ -396,7 +408,7 @@ class App(ctk.CTk):
             self._log_wrap, font=FM(10), fg_color=_BAR,
             text_color=_LOG_B, corner_radius=0, state="disabled",
             scrollbar_button_color=_SCRL_B)
-        self.log_area.grid(row=1, column=0, sticky="nsew")
+        self.log_area.grid(row=2, column=0, sticky="nsew")
 
         self._log_visible = True
 
@@ -406,25 +418,47 @@ class App(ctk.CTk):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        section_title(p, "Files",
-                      "Select your audio or video file and model cache.", 0)
+        section_title(p, "Transcribe",
+                      "Select your media file and set the transcription language.", 0)
 
-        c1 = card(p, "Source")
+        c1 = card(p, "Media File")
         c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         c1.grid_columnconfigure(0, weight=1)
         self.v_file = ctk.StringVar()
-        browse_row(c1, "Audio / Video File", self.v_file, self._browse_file, 0)
+        browse_row(c1, "Audio or Video File", self.v_file, self._browse_file, 0)
 
-        c2 = card(p, "Models")
+        c2 = card(p, "Language")
         c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         c2.grid_columnconfigure(0, weight=1)
-        self.v_model_dir = ctk.StringVar(value=_default_model_dir())
-        browse_row(c2, "Model Cache Directory", self.v_model_dir,
-                   self._browse_model_dir, 0)
-        ctk.CTkLabel(c2, text="Where WhisperX stores downloaded models",
+        self._lang_map = {
+            "Auto-detect":  "auto",
+            "English":      "en",
+            "Arabic":       "ar",
+            "Chinese":      "zh",
+            "Dutch":        "nl",
+            "French":       "fr",
+            "Georgian":     "ka",
+            "German":       "de",
+            "Hindi":        "hi",
+            "Italian":      "it",
+            "Japanese":     "ja",
+            "Korean":       "ko",
+            "Pashto":       "ps",
+            "Persian":      "fa",
+            "Polish":       "pl",
+            "Portuguese":   "pt",
+            "Russian":      "ru",
+            "Spanish":      "es",
+            "Turkish":      "tr",
+            "Urdu":         "ur",
+        }
+        self.v_lang = ctk.StringVar(value="Auto-detect")
+        ctk.CTkLabel(c2, text="Spoken language in the audio",
                      font=F(10), text_color=_HINT).grid(
-            row=2, column=0, columnspan=2, sticky="w",
-            padx=16, pady=(0, 12))
+            row=1, column=0, sticky="w", padx=16, pady=(10, 4))
+        combo(c2, self.v_lang,
+              list(self._lang_map.keys()),
+              width=200).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
 
         return p
 
@@ -434,10 +468,10 @@ class App(ctk.CTk):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        section_title(p, "Model",
-                      "Choose the transcription model and performance settings.", 0)
+        section_title(p, "Quality",
+                      "Adjust accuracy and speed to match your needs.", 0)
 
-        c1 = card(p, "Configuration")
+        c1 = card(p, "Model")
         c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         c1.grid_columnconfigure(0, weight=1)
 
@@ -449,7 +483,7 @@ class App(ctk.CTk):
             ("Model", self.v_model,
              ["tiny", "tiny.en", "base", "base.en", "small", "small.en",
               "medium", "medium.en", "large-v1", "large-v2", "large-v3"]),
-            ("Compute Type", self.v_compute,
+            ("Precision", self.v_compute,
              ["int8", "float16", "float32", "int8_float16"]),
         ]):
             r = 1 + i * 3
@@ -471,7 +505,7 @@ class App(ctk.CTk):
         ctk.CTkFrame(c1, height=12, fg_color="transparent").grid(
             row=99, column=0)
 
-        c2 = card(p, "Performance")
+        c2 = card(p, "Expert Tuning")
         c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         c2.grid_columnconfigure(0, weight=1)
         c2.grid_columnconfigure(1, weight=1)
@@ -482,9 +516,9 @@ class App(ctk.CTk):
         self.v_chunk = ctk.StringVar(value="30")
 
         for col, (lbl, var, hint) in enumerate([
-            ("Batch Size", self.v_batch, "Higher = faster, more VRAM"),
-            ("Beam Size",  self.v_beam,  "Higher = accurate, slower"),
-            ("Chunk (s)",  self.v_chunk, "VAD segment length"),
+            ("Speed",        self.v_batch, "Higher = faster, needs more VRAM"),
+            ("Accuracy",     self.v_beam,  "Higher = more accurate, slower"),
+            ("Segment (s)",  self.v_chunk, "Audio chunk size in seconds"),
         ]):
             ctk.CTkLabel(c2, text=lbl, font=F(11),
                          text_color=_LABEL).grid(
@@ -512,29 +546,29 @@ class App(ctk.CTk):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        section_title(p, "Output",
-                      "Choose where to save and which formats to export.", 0)
+        section_title(p, "Save",
+                      "Choose where to save your files and which formats to export.", 0)
 
-        c1 = card(p, "Destination")
+        c1 = card(p, "Save Location")
         c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         c1.grid_columnconfigure(0, weight=1)
         self.v_out_dir = ctk.StringVar()
-        browse_row(c1, "Output Directory", self.v_out_dir,
+        browse_row(c1, "Save to Folder", self.v_out_dir,
                    self._browse_out_dir, 0)
 
-        c2 = card(p, "Formats")
+        c2 = card(p, "Export Formats")
         c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         c2.grid_columnconfigure(0, weight=1)
         c2.grid_columnconfigure(1, weight=1)
 
         self.v_fmts = {}
         fmts = [
-            ("word_json", "Word JSON",  "Per-word timestamps & scores", True),
-            ("srt",       "SRT",        "Standard subtitles",           False),
-            ("vtt",       "VTT",        "WebVTT subtitles",             False),
-            ("txt",       "TXT",        "Plain text",                   False),
-            ("tsv",       "TSV",        "Tab-separated",                False),
-            ("json",      "JSON",       "Segment-level",                False),
+            ("word_json", "Word-level JSON", "Per-word timestamps & scores", True),
+            ("srt",       "SRT",             "Standard subtitles",           False),
+            ("vtt",       "VTT",             "WebVTT subtitles",             False),
+            ("txt",       "TXT",             "Plain text transcript",        False),
+            ("tsv",       "TSV",             "Tab-separated data",           False),
+            ("json",      "JSON",            "Segment-level data",           False),
         ]
         for i, (key, name, desc, default) in enumerate(fmts):
             v = ctk.BooleanVar(value=default)
@@ -560,13 +594,21 @@ class App(ctk.CTk):
         ctk.CTkFrame(c2, height=8, fg_color="transparent").grid(
             row=99, column=0, columnspan=2)
 
-        c3 = card(p, "Alignment")
+        c3 = card(p, "Word Timestamps")
         c3.grid(row=4, column=0, sticky="ew", pady=(0, 10))
         c3.grid_columnconfigure(0, weight=1)
         self.v_align = ctk.BooleanVar(value=True)
-        toggle_row(c3, "Word-level alignment",
-                   "Required for Word JSON and word highlighting",
+        toggle_row(c3, "Word timestamps",
+                   "Adds per-word timing — required for Word-level JSON and karaoke highlighting",
                    self.v_align, 1)
+
+        c4 = card(p, "Silence Removal")
+        c4.grid(row=5, column=0, sticky="ew", pady=(0, 10))
+        c4.grid_columnconfigure(0, weight=1)
+        self.v_vad = ctk.BooleanVar(value=True)
+        toggle_row(c4, "Remove silence",
+                   "Skips quiet sections before transcribing — faster and cleaner results",
+                   self.v_vad, 1)
 
         return p
 
@@ -576,76 +618,42 @@ class App(ctk.CTk):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        section_title(p, "Advanced",
-                      "Language, VAD and subtitle settings.", 0)
+        section_title(p, "Settings",
+                      "Fine-tune silence detection, subtitle formatting, and AI model storage.", 0)
 
-        c1 = card(p, "Language")
+        c1 = card(p, "Silence Detection")
         c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         c1.grid_columnconfigure(0, weight=1)
 
-        self._lang_map = {
-            "Auto-detect":  "auto",
-            "English":      "en",
-            "Arabic":       "ar",
-            "French":       "fr",
-            "German":       "de",
-            "Spanish":      "es",
-            "Chinese":      "zh",
-            "Japanese":     "ja",
-            "Korean":       "ko",
-            "Russian":      "ru",
-            "Portuguese":   "pt",
-            "Italian":      "it",
-            "Dutch":        "nl",
-            "Polish":       "pl",
-            "Turkish":      "tr",
-            "Persian":      "fa",
-            "Urdu":         "ur",
-            "Hindi":        "hi",
-        }
-        self.v_lang = ctk.StringVar(value="English")
-        ctk.CTkLabel(c1, text="Language", font=F(12),
-                     text_color=_LABEL).grid(row=1, column=0, sticky="w",
-                                              padx=16, pady=(12, 2))
-        combo(c1, self.v_lang,
-              list(self._lang_map.keys()),
-              width=180).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
-
-        c2 = card(p, "Voice Activity Detection")
-        c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        c2.grid_columnconfigure(0, weight=1)
-
-        self.v_vad        = ctk.BooleanVar(value=True)
         self.v_vad_onset  = ctk.StringVar(value="0.500")
         self.v_vad_offset = ctk.StringVar(value="0.363")
 
-        toggle_row(c2, "Enable VAD Filter",
-                   "Removes silence before transcribing",
-                   self.v_vad, 1)
-
-        vf = ctk.CTkFrame(c2, fg_color="transparent")
+        ctk.CTkLabel(c1, text="Adjust how aggressively silence is detected.",
+                     font=F(10), text_color=_HINT).grid(
+            row=1, column=0, sticky="w", padx=16, pady=(10, 6))
+        vf = ctk.CTkFrame(c1, fg_color="transparent")
         vf.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
-        for i, (lbl, var) in enumerate([("Onset", self.v_vad_onset),
-                                        ("Offset", self.v_vad_offset)]):
+        for i, (lbl, var) in enumerate([("Sensitivity", self.v_vad_onset),
+                                        ("Release",     self.v_vad_offset)]):
             ctk.CTkLabel(vf, text=lbl, font=F(11),
                          text_color=_LABEL).grid(row=0, column=i * 2,
                                                   sticky="w",
                                                   padx=(0 if i == 0 else 20, 8))
             entry(vf, var, width=88).grid(row=0, column=i * 2 + 1, sticky="w")
 
-        c3 = card(p, "Subtitle Options")
-        c3.grid(row=4, column=0, sticky="ew", pady=(0, 10))
-        c3.grid_columnconfigure(0, weight=1)
+        c2 = card(p, "Subtitle Formatting")
+        c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        c2.grid_columnconfigure(0, weight=1)
 
         self.v_highlight = ctk.BooleanVar(value=False)
         self.v_max_width = ctk.StringVar(value="")
         self.v_max_count = ctk.StringVar(value="")
 
-        toggle_row(c3, "Highlight words",
-                   "Karaoke-style highlighting in SRT / VTT  (requires alignment)",
+        toggle_row(c2, "Karaoke highlighting",
+                   "Word-by-word highlight effect for SRT and VTT subtitles",
                    self.v_highlight, 1)
 
-        sf = ctk.CTkFrame(c3, fg_color="transparent")
+        sf = ctk.CTkFrame(c2, fg_color="transparent")
         sf.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
         for i, (lbl, var, ph) in enumerate([
             ("Max line width", self.v_max_width, "default"),
@@ -658,7 +666,80 @@ class App(ctk.CTk):
             entry(sf, var, width=88, placeholder=ph).grid(
                 row=0, column=i * 2 + 1, sticky="w")
 
+        c3 = card(p, "AI Models")
+        c3.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        c3.grid_columnconfigure(0, weight=1)
+        self.v_model_dir = ctk.StringVar(value=_default_model_dir())
+        browse_row(c3, "AI Models Folder", self.v_model_dir,
+                   self._browse_model_dir, 0)
+        ctk.CTkLabel(c3, text="Where downloaded AI models are stored",
+                     font=F(10), text_color=_HINT).grid(
+            row=2, column=0, columnspan=2, sticky="w",
+            padx=16, pady=(0, 12))
+
         return p
+
+    # ── Support dialog ────────────────────────────────────────────────────────
+
+    def _show_support(self):
+        w = ctk.CTkToplevel(self)
+        w.title("Support the Project")
+        w.geometry("420x470")
+        w.resizable(False, False)
+        w.grab_set()
+        w.focus_set()
+        w.grid_columnconfigure(0, weight=1)
+        w.grid_rowconfigure(0, weight=1)
+
+        root = ctk.CTkFrame(w, fg_color=_CONT, corner_radius=0)
+        root.grid(row=0, column=0, sticky="nsew")
+        root.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(root, text="♥", font=F(30),
+                     text_color=("#c44569", "#e05c8a")).grid(
+            row=0, column=0, pady=(30, 2))
+        ctk.CTkLabel(root, text="Support this project", font=F(18, "bold"),
+                     text_color=_PRI).grid(row=1, column=0, pady=(0, 20))
+
+        msg = ctk.CTkFrame(root, fg_color=_CARD, corner_radius=12)
+        msg.grid(row=2, column=0, padx=28, sticky="ew", pady=(0, 22))
+        msg.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            msg,
+            text=(
+                "I'm a working student engineer and part-time researcher\n"
+                "building this entirely in my spare time — free, forever.\n\n"
+                "If this app has saved you hours of work, a small contribution\n"
+                "goes a long way and keeps development moving forward."
+            ),
+            font=F(12), text_color=_LABEL,
+            justify="center", wraplength=340,
+        ).grid(row=0, column=0, padx=20, pady=16)
+
+        def _open(url):
+            return lambda: webbrowser.open(url)
+
+        ctk.CTkButton(
+            root, text="♥   Sponsor on GitHub", height=42, corner_radius=10,
+            fg_color=("#c44569", "#d63384"), hover_color=("#a83058", "#bf2070"),
+            text_color="#ffffff", font=F(13, "bold"),
+            command=_open("https://github.com/sponsors/ibrahimqureshae"),
+        ).grid(row=3, column=0, padx=28, sticky="ew", pady=(0, 10))
+
+        ctk.CTkButton(
+            root, text="   Donate via PayPal", height=42, corner_radius=10,
+            fg_color=("#0070ba", "#0085cc"), hover_color=("#005ea0", "#006eb0"),
+            text_color="#ffffff", font=F(13, "bold"),
+            command=_open("https://www.paypal.me/mibrahimqr"),
+        ).grid(row=4, column=0, padx=28, sticky="ew", pady=(0, 10))
+
+        ctk.CTkButton(
+            root, text="★   Star on GitHub  —  it's free!", height=38,
+            corner_radius=10, fg_color="transparent", hover_color=_NAVHOV,
+            text_color=_LOGO_S, border_width=1, border_color=_BORDER,
+            font=F(12),
+            command=_open("https://github.com/ibrahimqureshae/whisperx-transcriber"),
+        ).grid(row=5, column=0, padx=28, sticky="ew", pady=(0, 28))
 
     # ── Status bar ────────────────────────────────────────────────────────────
 
@@ -666,7 +747,7 @@ class App(ctk.CTk):
         bar = self._bar
         bar.grid_columnconfigure(2, weight=1)
 
-        self._dot = ctk.CTkLabel(bar, text="*", font=F(12),
+        self._dot = ctk.CTkLabel(bar, text="●", font=F(10),
                                  text_color="#34c759", width=16)
         self._dot.grid(row=0, column=0, padx=(18, 4))
 
@@ -684,14 +765,15 @@ class App(ctk.CTk):
         self._progress.set(0)
 
         self._stop_btn = ctk.CTkButton(
-            bar, text="Stop", width=72, height=34, corner_radius=8,
-            fg_color=_NAVACT, hover_color=_MID,
-            text_color=_DIM_TXT, state="disabled",
+            bar, text="Cancel", width=72, height=34, corner_radius=8,
+            fg_color="transparent", hover_color=_BAR,
+            text_color=_BAR, text_color_disabled=_BAR,
+            border_width=0, state="disabled",
             font=F(12), command=self._on_stop)
         self._stop_btn.grid(row=0, column=3, padx=(0, 8))
 
         self._run_btn = ctk.CTkButton(
-            bar, text="Run", width=82, height=34, corner_radius=8,
+            bar, text="Transcribe", width=100, height=34, corner_radius=8,
             fg_color="#4a9eff", hover_color="#6ab0ff",
             text_color="#ffffff",
             font=F(13, "bold"), command=self._on_run)
@@ -766,12 +848,12 @@ class App(ctk.CTk):
                 self.v_out_dir.set(os.path.dirname(p))
 
     def _browse_model_dir(self):
-        p = filedialog.askdirectory(title="Model Cache Directory")
+        p = filedialog.askdirectory(title="AI Models Folder")
         if p:
             self.v_model_dir.set(p)
 
     def _browse_out_dir(self):
-        p = filedialog.askdirectory(title="Output Directory")
+        p = filedialog.askdirectory(title="Save to Folder")
         if p:
             self.v_out_dir.set(p)
 
@@ -824,7 +906,8 @@ class App(ctk.CTk):
 
         self._stop.clear()
         self._run_btn.configure(state="disabled", fg_color="#2a5a8a")
-        self._stop_btn.configure(state="normal", text_color=_PRI)
+        self._stop_btn.configure(state="normal", text_color=("#cc3333", "#ff453a"),
+                                  hover_color=_NAVHOV)
         self._progress.configure(mode="indeterminate")
         self._progress.start()
         self._status_var.set("Running...")
@@ -842,7 +925,8 @@ class App(ctk.CTk):
         self._stop.set()
         self._log("Stopping after current operation...")
         self._status_var.set("Stopping...")
-        self._stop_btn.configure(state="disabled", text_color=_DIM_TXT)
+        self._stop_btn.configure(state="disabled", text_color=_BAR,
+                                  hover_color=_BAR)
 
     def _worker(self, cfg):
         try:
@@ -864,7 +948,7 @@ class App(ctk.CTk):
 
             # ── Model ─────────────────────────────────────────────────────────
             model_cache = os.path.join(
-                cfg["model_dir"],
+                cfg["model_dir"], "hub",
                 f"models--Systran--faster-whisper-{cfg['model']}")
             if not os.path.isdir(model_cache):
                 self._log(f"Downloading model '{cfg['model']}' for the first time...")
@@ -914,6 +998,7 @@ class App(ctk.CTk):
             # ── Export ────────────────────────────────────────────────────────
             self._log("Saving files...")
             self.after(0, lambda: self._status_var.set("Saving..."))
+            last_path = None
             for fmt, path, err in pipeline.export(
                     result, cfg["formats"], cfg["out_dir"], cfg["audio"],
                     {"max_width": cfg["max_width"],
@@ -923,10 +1008,15 @@ class App(ctk.CTk):
                     self._log(f"  {fmt} error: {err}")
                 else:
                     self._log(f"  {fmt:<10}->  {path}")
+                    last_path = path
 
             self._log("Done!")
             self.after(0, lambda: self._status_var.set("Done"))
             self.after(0, lambda: self._dot.configure(text_color="#34c759"))
+            if last_path:
+                folder = os.path.dirname(os.path.abspath(last_path))
+                self.after(0, lambda f=folder: subprocess.Popen(
+                    ["explorer", f], creationflags=subprocess.CREATE_NO_WINDOW))
 
         except Exception as e:
             self._log(f"ERROR: {e}\n{traceback.format_exc()}")
@@ -940,7 +1030,8 @@ class App(ctk.CTk):
 
     def _reset_btns(self):
         self._run_btn.configure(state="normal", fg_color="#4a9eff")
-        self._stop_btn.configure(state="disabled", text_color=_DIM_TXT)
+        self._stop_btn.configure(state="disabled", text_color=_BAR,
+                                  hover_color=_BAR)
         self._progress.stop()
         self._progress.set(0)
 

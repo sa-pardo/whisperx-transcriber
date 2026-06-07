@@ -80,12 +80,13 @@ echo   [4/4] Creating portable zip...
 if not exist "%ROOT%\dist\release" mkdir "%ROOT%\dist\release"
 set "ZIP=%ROOT%\dist\release\WhisperXTranscriber.zip"
 if exist "%ZIP%" del /f "%ZIP%"
-powershell -NoProfile -Command "Compress-Archive -Path '%DIST%\*' -DestinationPath '%ZIP%'"
+"%PY%" -c "import zipfile,pathlib; src=pathlib.Path(r'%DIST%'); out=pathlib.Path(r'%ZIP%'); zf=zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=6); [zf.write(f,f.relative_to(src)) for f in src.rglob('*') if f.is_file()]; zf.close(); print(f'  Packed {sum(1 for _ in src.rglob(chr(42)) if _.is_file())} files -> {out.stat().st_size//1048576} MB')"
 if errorlevel 1 (
     echo   ERROR: Zip creation failed.
     pause
     exit /b 1
 )
+
 echo.
 echo   ============================================================
 echo   Release zip ready: dist\release\WhisperXTranscriber.zip
