@@ -186,6 +186,7 @@ start	end	text
 2640	5380	امید ہے آپ سب خیریت سے ہوں گے
 ```
 
+> [!NOTE]
 > Urdu, Arabic, Persian, and Pashto all work out of the box. The model reads right-to-left text naturally — no post-processing or font tweaks required.
 
 ---
@@ -270,14 +271,15 @@ On first launch, the **Setup Wizard** opens and handles everything — including
 
 Once Python is ready, the wizard downloads the AI engine (1–3 GB). This is a one-time step. Every launch after this opens instantly.
 
+> [!TIP]
 > Prefer to install Python yourself? Get it from [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen.
 
 ### 4. Start transcribing
 
-1. Click **Transcribe** in the sidebar and select your audio or video file
-2. Go to **Quality** to pick your model and device
-3. Go to **Save** to choose which formats you want to export
-4. Hit **Transcribe** — the Activity panel shows you what's happening in real time
+1. Click <kbd>Transcribe</kbd> in the sidebar and select your audio or video file
+2. Go to <kbd>Quality</kbd> to pick your model and device
+3. Go to <kbd>Save</kbd> to choose which formats you want to export
+4. Hit <kbd>Transcribe</kbd> — the <kbd>Activity</kbd> panel shows you what's happening in real time
 
 ---
 
@@ -286,7 +288,7 @@ Once Python is ready, the wizard downloads the AI engine (1–3 GB). This is a o
 | | CPU | GPU (NVIDIA) |
 |---|---|---|
 | Setup download | ~1 GB | ~2–3 GB |
-| Transcription speed | ~0.3–0.5× realtime | ~8–15× realtime |
+| Transcription speed | 🔴 ~0.3–0.5× realtime | 🟢 ~8–15× realtime |
 | Hardware needed | Any Windows PC | NVIDIA GPU + driver 525+ |
 
 The wizard detects your GPU automatically. You can override the device any time in the **Quality** panel.
@@ -295,16 +297,17 @@ The wizard detects your GPU automatically. You can override the device any time 
 
 ### Choosing a model
 
-**Not sure where to start? Use `large-v2`** — it's the default for a reason. The only reasons to go smaller are speed on CPU or limited disk space.
+> [!TIP]
+> **Not sure where to start? Use `large-v2`** — it's the default for a reason. The only reasons to go smaller are speed on CPU or limited disk space.
 
 | Model | Disk | GPU speed | CPU speed | Accuracy |
 |---|---|---|---|---|
-| `tiny` | ~75 MB | Very fast | Fast | Low |
-| `base` | ~145 MB | Very fast | Moderate | Fair |
-| `small` | ~465 MB | Fast | ~Realtime | Good |
-| `medium` | ~1.5 GB | Moderate | Slow | High |
-| `large-v2` *(default)* | ~3 GB | ~Realtime | Very slow | Best |
-| `large-v3` | ~3 GB | ~Realtime | Very slow | Best |
+| `tiny` | ~75 MB | 🟢 Very fast | 🟢 Fast | 🔴 Low |
+| `base` | ~145 MB | 🟢 Very fast | 🟡 Moderate | 🟡 Fair |
+| `small` | ~465 MB | 🟢 Fast | 🟡 ~Realtime | 🟡 Good |
+| `medium` | ~1.5 GB | 🟡 Moderate | 🔴 Slow | 🟢 High |
+| `large-v2` *(default)* | ~3 GB | 🟡 ~Realtime | 🔴 Very slow | 🟢 Best |
+| `large-v3` | ~3 GB | 🟡 ~Realtime | 🔴 Very slow | 🟢 Best |
 
 Models download once on first use and are cached — you never re-download them.
 
@@ -357,31 +360,34 @@ Windows Smart App Control is blocking a native library the AI engine needs. To f
 3. Switch it to **Off**
 4. Restart your laptop, then run the app again
 
+> [!TIP]
 > **Don't want to turn it off?** Add the `WhisperXTranscriber` folder as an exclusion under **Windows Security → Virus & threat protection → Exclusions** instead.
->
-> Note: Smart App Control cannot be re-enabled without reinstalling Windows once disabled — this is a Windows limitation, not something the app can work around.
+
+> [!WARNING]
+> Smart App Control cannot be re-enabled without reinstalling Windows once disabled. This is a Windows limitation — not something the app can work around.
 
 ---
 
 #### During transcription
 
 **"CUDA out of memory"**
-- Go to **Quality** and lower the **Speed** (batch size) slider — try 8, then 4
+- Go to <kbd>Quality</kbd> and lower the **Speed** (batch size) slider — try 8, then 4
 - Or switch to a smaller model (`medium` or `small`)
 
 **Word alignment failed**
-- Turn off **Word timestamps** in the Save panel
+- Turn off **Word timestamps** in the <kbd>Save</kbd> panel
 - SRT, VTT, and TXT still export cleanly without word-level timing
 
 **Transcription is very slow**
-- Switch to a smaller model (`small` or `base`) in the Quality panel
-- If you have an NVIDIA GPU, make sure **Device** is set to **CUDA** in the Quality panel — not CPU
+- Switch to a smaller model (`small` or `base`) in the <kbd>Quality</kbd> panel
+- If you have an NVIDIA GPU, make sure **Device** is set to **CUDA** in the <kbd>Quality</kbd> panel — not CPU
 
 ---
 
 #### Still stuck?
 
-Open a [GitHub issue](../../issues) and paste the output from the **Activity** panel — that's the fastest way to get help.
+> [!NOTE]
+> Open a [GitHub issue](../../issues) and paste the output from the <kbd>Activity</kbd> panel — that's the fastest way to get help.
 
 ---
 
@@ -446,7 +452,8 @@ WhisperXTranscriber.exe  (PyInstaller onedir)
           └── All later runs  →  spawns runtime/python.exe app.py
 ```
 
-This means the distributable stays small and AI engine updates don't require users to re-download the whole app.
+> [!NOTE]
+> This means the distributable stays small and AI engine updates don't require users to re-download the whole app.
 
 ### Package a release
 
@@ -506,6 +513,7 @@ This project is built and maintained by a single developer — a working student
 - **Linux AppImage** — after macOS is solid
 - **Local error logs** — rotating crash log so nothing fails silently again
 
+> [!TIP]
 > Have a feature you really want? The fastest way to make it happen is to [support the project](#support-the-project) or open an issue describing your use case.
 
 ---
