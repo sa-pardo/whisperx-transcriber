@@ -59,11 +59,6 @@ copy /Y "%ROOT%\setup_wizard.py"  "%DIST%\setup_wizard.py"  >nul
 copy /Y "%ROOT%\transcribe.py"    "%DIST%\transcribe.py"    >nul
 copy /Y "%ROOT%\version.txt"      "%DIST%\version.txt"      >nul
 
-rem Requirements files (used by setup wizard to know what to install)
-copy /Y "%ROOT%\requirements-core.txt" "%DIST%\requirements-core.txt" >nul
-copy /Y "%ROOT%\requirements-cpu.txt"  "%DIST%\requirements-cpu.txt"  >nul
-copy /Y "%ROOT%\requirements-gpu.txt"  "%DIST%\requirements-gpu.txt"  >nul
-
 rem Create empty runtime/ and Models/ placeholder folders
 if not exist "%DIST%\runtime"  mkdir "%DIST%\runtime"
 if not exist "%DIST%\Models"   mkdir "%DIST%\Models"
@@ -75,32 +70,20 @@ if exist "%ROOT%\assets\icon.ico" (
 )
 echo         Done.
 
-rem -- Build Inno Setup installer -----------------------------------------------
-echo   [4/4] Building installer...
-set "ISCC="
-for %%p in (
-    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-    "C:\Program Files\Inno Setup 6\ISCC.exe"
-) do (
-    if exist %%p set "ISCC=%%~p"
+rem -- Create portable zip ------------------------------------------------------
+echo   [4/4] Creating portable zip...
+if not exist "%ROOT%\dist\release" mkdir "%ROOT%\dist\release"
+set "ZIP=%ROOT%\dist\release\WhisperXTranscriber.zip"
+if exist "%ZIP%" del /f "%ZIP%"
+powershell -NoProfile -Command "Compress-Archive -Path '%DIST%\*' -DestinationPath '%ZIP%'"
+if errorlevel 1 (
+    echo   ERROR: Zip creation failed.
+    pause
+    exit /b 1
 )
-
-if defined ISCC (
-    echo         Running Inno Setup...
-    "%ISCC%" "%ROOT%\packaging\installer.iss"
-    if errorlevel 1 (
-        echo   ERROR: Inno Setup build failed.
-        pause
-        exit /b 1
-    )
-    echo.
-    echo   ============================================================
-    echo   Installer ready: dist\installer\WhisperXTranscriber-Setup.exe
-    echo   ============================================================
-) else (
-    echo   WARNING: Inno Setup not found. Skipping installer build.
-    echo   Install from: https://jrsoftware.org/isdl.php
-    echo   Then run: "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
-)
+echo.
+echo   ============================================================
+echo   Release zip ready: dist\release\WhisperXTranscriber.zip
+echo   ============================================================
 echo.
 pause

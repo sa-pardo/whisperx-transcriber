@@ -17,8 +17,6 @@ import customtkinter as ctk
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-TORCH_CPU_URL = "https://download.pytorch.org/whl/cpu"
-TORCH_GPU_URL = "https://download.pytorch.org/whl/cu121"
 
 _F  = lambda sz, wt="normal": ctk.CTkFont(family="Segoe UI", size=sz, weight=wt)
 _FM = lambda sz=10: ctk.CTkFont(family="Consolas", size=sz)
@@ -73,9 +71,8 @@ class SetupWizard:
         self.on_complete = on_complete
         self.runtime_dir = os.path.join(base_dir, "runtime")
         self.has_gpu     = _has_nvidia()
-        self.use_gpu     = self.has_gpu
         self.python_path = _find_python()
-        self._q: queue.Queue[str] = queue.Queue()
+        self._q: queue.Queue[tuple[str, str]] = queue.Queue()
 
         self.win = ctk.CTk()
         self.win.title("WhisperX Transcriber — Setup")
@@ -132,7 +129,8 @@ class SetupWizard:
                      text_color=_PRI).grid(row=0, column=0, sticky="w", pady=(0, 6))
         ctk.CTkLabel(b,
                      text=("This wizard installs the AI transcription engine.\n"
-                            "It is a one-time download. Subsequent launches open instantly."),
+                            "This is a one-time 1–3 GB download (2–5 GB on disk).\n"
+                            "Subsequent launches open instantly."),
                      font=_F(13), text_color=_DIM,
                      wraplength=500, justify="left",
                      ).grid(row=1, column=0, sticky="w", pady=(0, 18))
@@ -140,31 +138,13 @@ class SetupWizard:
         # GPU card
         gcard = ctk.CTkFrame(b, fg_color=_CARD, corner_radius=10)
         gcard.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        gcard.grid_columnconfigure(1, weight=1)
+        gcard.grid_columnconfigure(0, weight=1)
 
-        gpu_label = ("●  NVIDIA GPU detected" if self.has_gpu
-                     else "●  No GPU detected — CPU mode")
+        gpu_label = ("●  NVIDIA GPU detected — GPU acceleration will be used"
+                     if self.has_gpu else "●  No GPU detected — will run on CPU")
         gpu_color = "#22cc66" if self.has_gpu else "#888888"
         ctk.CTkLabel(gcard, text=gpu_label, font=_F(12, "bold"),
                      text_color=gpu_color).grid(row=0, column=0, padx=16, pady=12, sticky="w")
-
-        self._size_lbl = ctk.CTkLabel(gcard,
-                                       text=self._size_hint(),
-                                       font=_F(11), text_color=_HINT)
-        self._size_lbl.grid(row=0, column=1, padx=16, pady=12, sticky="e")
-
-        if self.has_gpu:
-            tr = ctk.CTkFrame(gcard, fg_color="transparent")
-            tr.grid(row=1, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 12))
-            tr.grid_columnconfigure(0, weight=1)
-            ctk.CTkLabel(tr, text="Use GPU acceleration  (recommended — ~10× faster)",
-                         font=_F(12), text_color=_DIM).grid(row=0, column=0, sticky="w")
-            self._gpu_sw = ctk.CTkSwitch(tr, text="", width=44,
-                                          button_color="#4a9eff",
-                                          progress_color="#4a9eff",
-                                          command=self._on_gpu_toggle)
-            self._gpu_sw.grid(row=0, column=1)
-            self._gpu_sw.select()
 
         # Python card
         pcard = ctk.CTkFrame(b, fg_color=_CARD, corner_radius=10)
@@ -200,12 +180,6 @@ class SetupWizard:
                               "https://www.python.org/downloads/"),
                           ).grid(row=0, column=0, pady=13, padx=18, sticky="e")
 
-    def _size_hint(self) -> str:
-        return "~3 GB download" if self.use_gpu else "~700 MB download"
-
-    def _on_gpu_toggle(self):
-        self.use_gpu = bool(self._gpu_sw.get())
-        self._size_lbl.configure(text=self._size_hint())
 
     # ── Page 2: Installing ────────────────────────────────────────────────────
 
@@ -213,51 +187,90 @@ class SetupWizard:
         self._clear(self.body)
         self._clear(self.ftr)
         b = self.body
-        b.grid_rowconfigure(3, weight=1)
+        b.grid_rowconfigure(4, weight=1)
 
         ctk.CTkLabel(b, text="Installing...", font=_F(22, "bold"),
                      text_color=_PRI).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
         self._status_var = ctk.StringVar(value="Preparing...")
         ctk.CTkLabel(b, textvariable=self._status_var, font=_F(12),
-                     text_color=_DIM).grid(row=1, column=0, sticky="w", pady=(0, 12))
+                     text_color=_DIM).grid(row=1, column=0, sticky="w", pady=(0, 8))
 
-        self._prog = ctk.CTkProgressBar(b, height=5, corner_radius=3,
+        prog_row = ctk.CTkFrame(b, fg_color="transparent")
+        prog_row.grid(row=2, column=0, sticky="ew", pady=(0, 4))
+        prog_row.grid_columnconfigure(0, weight=1)
+
+        self._prog = ctk.CTkProgressBar(prog_row, height=8, corner_radius=4,
                                          fg_color=("#d0d0d0", "#1a1a1a"),
                                          progress_color="#4a9eff",
-                                         mode="indeterminate")
-        self._prog.grid(row=2, column=0, sticky="ew", pady=(0, 12))
-        self._prog.start()
+                                         mode="determinate")
+        self._prog.set(0)
+        self._prog.grid(row=0, column=0, sticky="ew")
+
+        self._pct_lbl = ctk.CTkLabel(prog_row, text="0%", font=_F(10),
+                                      text_color=_HINT, width=36)
+        self._pct_lbl.grid(row=0, column=1, padx=(8, 0))
+
+        self._activity_lbl = ctk.CTkLabel(b, text="", font=_FM(9),
+                                           text_color=_HINT, anchor="w",
+                                           wraplength=540)
+        self._activity_lbl.grid(row=3, column=0, sticky="ew", pady=(0, 6))
 
         self._log_box = ctk.CTkTextbox(b, font=_FM(10), fg_color=_LOG,
                                         text_color=_LTXT, corner_radius=8,
                                         state="disabled")
-        self._log_box.grid(row=3, column=0, sticky="nsew")
+        self._log_box.grid(row=4, column=0, sticky="nsew")
 
         ctk.CTkLabel(self.ftr,
-                     text="Please wait — 5 to 30 minutes depending on your connection.",
+                     text="Please wait — typically 10–45 minutes depending on your connection speed.",
                      font=_F(11), text_color=_HINT,
                      ).grid(row=0, column=0, pady=18, padx=18)
 
     def _drain_log(self):
         while True:
             try:
-                msg = self._q.get_nowait()
-                if hasattr(self, "_log_box"):
-                    self._log_box.configure(state="normal")
-                    self._log_box.insert("end", msg + "\n")
-                    self._log_box.see("end")
-                    self._log_box.configure(state="disabled")
+                kind, text = self._q.get_nowait()
+                if kind == "r":
+                    if hasattr(self, "_activity_lbl"):
+                        t = text.strip()[:90]
+                        self.win.after(0, lambda s=t: self._activity_lbl.configure(text=s))
+                else:
+                    if hasattr(self, "_log_box") and text:
+                        if "━" in text or "─" in text:
+                            continue
+                        self._log_box.configure(state="normal")
+                        self._log_box.insert("end", text + "\n")
+                        self._log_box.see("end")
+                        self._log_box.configure(state="disabled")
             except queue.Empty:
                 break
         self.win.after(100, self._drain_log)
 
     def _log(self, msg: str):
-        self._q.put(msg)
+        self._q.put(("n", msg))
 
     def _set_status(self, msg: str):
         if hasattr(self, "_status_var"):
             self.win.after(0, lambda: self._status_var.set(msg))
+        if hasattr(self, "_activity_lbl"):
+            self.win.after(0, lambda: self._activity_lbl.configure(text=""))
+
+    def _set_progress(self, value: float, step: str = ""):
+        def _do():
+            if hasattr(self, "_prog"):
+                self._prog.set(max(0.0, min(1.0, value)))
+            if hasattr(self, "_pct_lbl"):
+                self._pct_lbl.configure(text=f"{int(value * 100)}%")
+        self.win.after(0, _do)
+
+    def _animate_progress(self, current: float, target: float):
+        """Slowly drift the progress bar toward target while install is running."""
+        if getattr(self, "_install_done", False):
+            return
+        next_val = min(current + 0.005, target)
+        self._set_progress(next_val)
+        if next_val < target:
+            self.win.after(1000, lambda: self._animate_progress(next_val, target))
 
     # ── Install logic ─────────────────────────────────────────────────────────
 
@@ -265,15 +278,37 @@ class SetupWizard:
         self._show_installing()
         threading.Thread(target=self._run_install, daemon=True).start()
 
+    def _pkg_installed(self, venv_pip: str, pkg: str) -> bool:
+        r = subprocess.run(
+            [venv_pip, "show", pkg],
+            capture_output=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        return r.returncode == 0
+
     def _run_pip(self, cmd: list[str]) -> int:
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, errors="replace",
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
-        for line in proc.stdout:
-            line = line.rstrip()
-            if line:
-                self._log(line)
+        buf = ""
+        while True:
+            chunk = proc.stdout.read(128)
+            if not chunk:
+                break
+            for ch in chunk.decode("utf-8", errors="replace"):
+                if ch == "\r":
+                    if buf.strip():
+                        self._q.put(("r", buf))
+                    buf = ""
+                elif ch == "\n":
+                    if buf.strip():
+                        self._q.put(("n", buf.rstrip()))
+                    buf = ""
+                else:
+                    buf += ch
+        if buf.strip():
+            self._q.put(("n", buf.rstrip()))
         proc.wait()
         return proc.returncode
 
@@ -284,46 +319,53 @@ class SetupWizard:
             venv_py  = os.path.join(runtime, "Scripts", "python.exe")
             venv_pip = os.path.join(runtime, "Scripts", "pip.exe")
 
-            # 1. Create venv
-            self._set_status("Creating virtual environment...")
-            self._log(f"Creating venv at: {runtime}\n")
-            r = subprocess.run([py, "-m", "venv", runtime],
-                               capture_output=True, text=True)
-            if r.returncode != 0:
-                raise RuntimeError(f"venv creation failed:\n{r.stderr}")
+            # 1. Create venv (skip if already exists)
+            if not os.path.isfile(venv_py):
+                self._set_status("Creating virtual environment...")
+                self._log(f"Creating venv at: {runtime}\n")
+                r = subprocess.run([py, "-m", "venv", runtime],
+                                   capture_output=True, text=True,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+                if r.returncode != 0:
+                    raise RuntimeError(f"venv creation failed:\n{r.stderr}")
+            else:
+                self._log(f"Venv already exists, reusing: {runtime}\n")
+            self._set_progress(0.05)
 
             # 2. Upgrade pip
             self._set_status("Upgrading pip...")
             self._log("\n[pip] Upgrading...")
             self._run_pip([venv_py, "-m", "pip", "install",
-                           "--upgrade", "pip", "--quiet"])
+                           "--upgrade", "pip", "--quiet", "--timeout", "120"])
+            self._set_progress(0.10)
 
-            # 3. PyTorch
-            torch_idx = TORCH_GPU_URL if self.use_gpu else TORCH_CPU_URL
-            size_hint = "~3 GB" if self.use_gpu else "~700 MB"
-            self._set_status(f"Downloading PyTorch ({size_hint})...")
-            self._log(f"\n[PyTorch] Installing from {torch_idx}")
-            rc = self._run_pip([venv_pip, "install",
-                                "torch", "torchaudio",
-                                "--index-url", torch_idx])
-            if rc != 0:
-                raise RuntimeError("PyTorch install failed — check your internet connection.")
-
-            # 4. WhisperX + UI deps
-            self._set_status("Installing WhisperX and UI dependencies...")
-            self._log("\n[WhisperX + UI] Installing...")
-            rc = self._run_pip([venv_pip, "install",
-                                "whisperx",
-                                "customtkinter>=5.2.2",
-                                "Pillow"])
-            if rc != 0:
-                raise RuntimeError("WhisperX install failed.")
+            # 3. Install everything in one pass — whisperx pulls the correct
+            #    torch version directly, avoiding a redundant download.
+            if self._pkg_installed(venv_pip, "whisperx"):
+                self._log("\n[All packages] Already installed — skipping.")
+                self._set_progress(0.95)
+            else:
+                self._set_status("Downloading AI engine and dependencies (1–3 GB, up to 5 GB on disk)...")
+                self._log("\n[Installing] whisperx + torch + all dependencies...")
+                self._install_done = False
+                self.win.after(1000, lambda: self._animate_progress(0.10, 0.89))
+                rc = self._run_pip([venv_pip, "install",
+                                    "--timeout", "120",
+                                    "whisperx",
+                                    "customtkinter>=5.2.2",
+                                    "Pillow"])
+                self._install_done = True
+                if rc != 0:
+                    raise RuntimeError(
+                        "pip install failed — see the log above for details.")
+                self._set_progress(0.95)
 
             # 5. Mark complete
             flag = os.path.join(runtime, ".setup_complete")
             with open(flag, "w") as fh:
                 fh.write("ok")
 
+            self._set_progress(1.0)
             self._set_status("Setup complete!")
             self._log("\n✓ All done! Launching app...")
             self.win.after(800, self._show_done)
@@ -377,10 +419,6 @@ class SetupWizard:
                       ).grid(row=0, column=1, pady=10, padx=(0, 18))
 
     def _retry(self):
-        import shutil as sh
-        # Clean up partial runtime before retrying
-        if os.path.isdir(self.runtime_dir):
-            sh.rmtree(self.runtime_dir, ignore_errors=True)
         self._show_welcome()
 
     def _finish(self):

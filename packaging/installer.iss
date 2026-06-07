@@ -42,7 +42,6 @@ OutputBaseFilename=WhisperXTranscriber-Setup
 ; Appearance
 SetupIconFile=..\assets\icon.ico
 WizardStyle=modern
-WizardSmallImageFile=..\assets\icon.ico
 
 ; Compression
 Compression=lzma2/ultra64

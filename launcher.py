@@ -21,12 +21,15 @@ def _base_dir() -> str:
 
 
 def _runtime_python() -> str:
-    return os.path.join(_base_dir(), "runtime", "Scripts", "python.exe")
+    base = _base_dir()
+    pythonw = os.path.join(base, "runtime", "Scripts", "pythonw.exe")
+    python  = os.path.join(base, "runtime", "Scripts", "python.exe")
+    return pythonw if os.path.isfile(pythonw) else python
 
 
 def _runtime_ready() -> bool:
     """Fast check — just look for the flag file written after successful setup."""
-    py = _runtime_python()
+    py = os.path.join(_base_dir(), "runtime", "Scripts", "python.exe")
     if not os.path.isfile(py):
         return False
     flag = os.path.join(_base_dir(), "runtime", ".setup_complete")
@@ -45,7 +48,14 @@ def _launch_app() -> None:
     if not os.path.isfile(runtime_py):
         _fatal("Runtime Python not found. Run the app again to reinstall the backend.")
 
-    subprocess.Popen([runtime_py, app_script])
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    subprocess.Popen(
+        [runtime_py, app_script],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     sys.exit(0)
 
 

@@ -10,6 +10,14 @@ from tkinter import filedialog, messagebox
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
 
+if IS_WIN:
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "Muqaddimah.WhisperXTranscriber")
+    except Exception:
+        pass
+
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -174,8 +182,6 @@ class App(ctk.CTk):
         self.title("WhisperX")
         self.geometry("920x660")
         self.minsize(820, 580)
-        if IS_MAC:
-            self.createcommand("tk::mac::Quit", self.destroy)
 
         self._stop       = threading.Event()
         self._q          = queue.Queue()
@@ -187,6 +193,9 @@ class App(ctk.CTk):
         self._setup_icon()
         self._poll_log()
         self._nav("Files")
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        if IS_MAC:
+            self.createcommand("tk::mac::Quit", self._on_close)
 
         # Probe for GPU devices in a background thread so torch import
         # does not block the window from appearing on first launch.
@@ -569,31 +578,39 @@ class App(ctk.CTk):
         p.grid_columnconfigure(0, weight=1)
 
         section_title(p, "Advanced",
-                      "Language, prompt, VAD and subtitle settings.", 0)
+                      "Language, VAD and subtitle settings.", 0)
 
-        c1 = card(p, "Language & Prompt")
+        c1 = card(p, "Language")
         c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         c1.grid_columnconfigure(0, weight=1)
 
-        self.v_lang = ctk.StringVar(value="en")
+        self._lang_map = {
+            "Auto-detect":  "auto",
+            "English":      "en",
+            "Arabic":       "ar",
+            "French":       "fr",
+            "German":       "de",
+            "Spanish":      "es",
+            "Chinese":      "zh",
+            "Japanese":     "ja",
+            "Korean":       "ko",
+            "Russian":      "ru",
+            "Portuguese":   "pt",
+            "Italian":      "it",
+            "Dutch":        "nl",
+            "Polish":       "pl",
+            "Turkish":      "tr",
+            "Persian":      "fa",
+            "Urdu":         "ur",
+            "Hindi":        "hi",
+        }
+        self.v_lang = ctk.StringVar(value="English")
         ctk.CTkLabel(c1, text="Language", font=F(12),
                      text_color=_LABEL).grid(row=1, column=0, sticky="w",
                                               padx=16, pady=(12, 2))
         combo(c1, self.v_lang,
-              ["en", "auto", "ar", "fr", "de", "es", "zh", "ja",
-               "ko", "ru", "pt", "it", "nl", "pl", "tr", "fa", "ur", "hi"],
-              width=180).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 10))
-
-        ctk.CTkLabel(c1, text="Initial Prompt  (optional)", font=F(12),
-                     text_color=_LABEL).grid(row=3, column=0, sticky="w",
-                                              padx=16, pady=(4, 2))
-        self.prompt_box = ctk.CTkTextbox(
-            c1, height=80, font=FM(11), fg_color=_ENTRY,
-            border_color=_BORDER, border_width=1, corner_radius=8)
-        self.prompt_box.grid(row=4, column=0, sticky="ew", padx=16, pady=(0, 6))
-        ctk.CTkLabel(c1, text="e.g.  Ibn Yasin, Al-Andalus, Umayyad, Quran",
-                     font=F(10), text_color=_HINT).grid(
-            row=5, column=0, sticky="w", padx=16, pady=(0, 14))
+              list(self._lang_map.keys()),
+              width=180).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
 
         c2 = card(p, "Voice Activity Detection")
         c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
@@ -795,8 +812,7 @@ class App(ctk.CTk):
             "out_dir":    self.v_out_dir.get().strip(),
             "formats":    [k for k, v in self.v_fmts.items() if v.get()],
             "align":      bool(self.v_align.get()),
-            "language":   self.v_lang.get(),
-            "prompt":     self.prompt_box.get("1.0", "end").strip(),
+            "language":   self._lang_map.get(self.v_lang.get(), "auto"),
             "vad":        bool(self.v_vad.get()),
             "vad_onset":  safe_float(self.v_vad_onset.get(), 0.5),
             "vad_offset": safe_float(self.v_vad_offset.get(), 0.363),
@@ -816,10 +832,18 @@ class App(ctk.CTk):
         self._dot.configure(text_color="#ff9f0a")
         threading.Thread(target=self._worker, args=(cfg,), daemon=True).start()
 
+    def _on_close(self):
+        self._stop.set()
+        try:
+            self.destroy()
+        finally:
+            os._exit(0)
+
     def _on_stop(self):
         self._stop.set()
-        self._log("Stop requested...")
+        self._log("Stopping after current operation...")
         self._status_var.set("Stopping...")
+        self._stop_btn.configure(state="disabled", text_color=_DIM_TXT)
 
     def _worker(self, cfg):
         try:
@@ -855,7 +879,20 @@ class App(ctk.CTk):
 
             lang = None if cfg["language"] == "auto" else cfg["language"]
 
-            self._log(f"Loading model '{cfg['model']}'...")
+            model_cache = os.path.join(
+                cfg["model_dir"],
+                f"models--Systran--faster-whisper-{cfg['model']}")
+            first_download = not os.path.isdir(model_cache)
+
+            if first_download:
+                self._log(f"Downloading model '{cfg['model']}' for the first time...")
+                self._log("  This may take several minutes depending on your connection.")
+                self._log("  The model will be saved and reused on all future runs.")
+                self.after(0, lambda: self._status_var.set("Downloading model..."))
+            else:
+                self._log(f"Loading model '{cfg['model']}' from cache...")
+                self.after(0, lambda: self._status_var.set("Loading model..."))
+
             model = whisperx.load_model(
                 cfg["model"], t_dev, compute_type=compute,
                 language=lang, asr_options={"beam_size": cfg["beam"]})
@@ -863,16 +900,16 @@ class App(ctk.CTk):
                 return
 
             self._log("Loading audio...")
+            self.after(0, lambda: self._status_var.set("Loading audio..."))
             audio = whisperx.load_audio(cfg["audio"])
             if self._stop.is_set():
                 return
 
             self._log("Transcribing...")
+            self.after(0, lambda: self._status_var.set("Transcribing..."))
             tx = {"batch_size": cfg["batch"]}
             if lang:
                 tx["language"] = lang
-            if cfg["prompt"]:
-                tx["initial_prompt"] = cfg["prompt"]
             result = model.transcribe(audio, **tx)
             det = result.get("language", lang or "en")
             self._log(f"  Language: {det}   Segments: {len(result['segments'])}")
@@ -883,6 +920,7 @@ class App(ctk.CTk):
                 "word_json" in cfg["formats"] or cfg["highlight"])
             if needs_align:
                 self._log("Aligning word timestamps...")
+                self.after(0, lambda: self._status_var.set("Aligning..."))
                 try:
                     ma, meta = whisperx.load_align_model(
                         language_code=det, device=a_dev)
@@ -899,12 +937,17 @@ class App(ctk.CTk):
                                 result["segments"], ma, meta, audio, "cpu")
                         except Exception as e2:
                             self._log(f"  Alignment failed: {e2}")
+            # whisperx.align() drops "language" from the result dict; restore it
+            # so SRT/VTT writers don't crash with KeyError: 'language'
+            result.setdefault("language", det)
+
             if self._stop.is_set():
                 return
 
             base = os.path.splitext(os.path.basename(cfg["audio"]))[0]
             os.makedirs(cfg["out_dir"], exist_ok=True)
             self._log("Saving files...")
+            self.after(0, lambda: self._status_var.set("Saving..."))
 
             if "word_json" in cfg["formats"]:
                 words = [w for seg in result["segments"]
@@ -938,6 +981,9 @@ class App(ctk.CTk):
             self.after(0, lambda: self._status_var.set("Error"))
             self.after(0, lambda: self._dot.configure(text_color="#ff3b30"))
         finally:
+            if self._stop.is_set():
+                self.after(0, lambda: self._status_var.set("Stopped"))
+                self.after(0, lambda: self._dot.configure(text_color="#888888"))
             self.after(0, self._reset_btns)
 
     def _reset_btns(self):

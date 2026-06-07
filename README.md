@@ -1,134 +1,193 @@
 # WhisperX Transcriber
 
-> A clean Windows desktop GUI for AI-powered transcription with word-level timestamps.  
-> Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
+> A clean Windows desktop app for AI-powered audio and video transcription.  
+> Word-level timestamps. Works completely offline. No subscription. No cloud.
 
-![App Screenshot](assets/screenshot.png)
+Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — the fastest open-source speech recognition stack available.
+
+---
+
+## Why use this?
+
+Most transcription tools are either expensive cloud services that send your audio to someone else's server, or complex Python scripts that require technical setup. WhisperX Transcriber is neither.
+
+- **Your audio never leaves your machine.** Everything runs locally — no cloud, no API key, no subscription.
+- **One-time setup, then works forever offline.** The AI engine downloads once (~1–3 GB). After that, you never need the internet again.
+- **No terminal, no Python knowledge required** for end users. Extract the zip, run the exe, click through a one-time setup wizard. Done.
+- **Fast.** On a modern NVIDIA GPU, it transcribes faster than realtime. Even on CPU it's practical for short and medium recordings.
+- **Accurate.** Powered by OpenAI's Whisper large-v2 model — one of the best open-source speech recognition models available.
+- **Word-level timestamps.** Every word is timestamped precisely, not just sentence segments. Essential for subtitle work, content search, and downstream processing.
 
 ---
 
 ## What it does
 
-- Transcribes audio and video files with **word-level timestamps**
-- Exports to **SRT, VTT, TXT, TSV, JSON, or Word JSON**
-- Auto-detects your **GPU** (NVIDIA CUDA) or falls back to CPU
-- Clean GUI — no terminal needed for end users
-- Small download — AI models are **never bundled**, they download on first use
+- Transcribes **audio and video files** to text with word-level timestamps
+- Exports to **SRT, VTT, TXT, TSV, JSON**, or a custom **Word JSON** format
+- Supports **17 languages** in the GUI, **99 languages** via the CLI
+- Auto-detects your **NVIDIA GPU** for fast transcription, falls back to CPU automatically
+- Strips silence automatically with a built-in **VAD (Voice Activity Detection)** filter
+- Produces **karaoke-style highlighted subtitles** (word-by-word highlighting in SRT/VTT)
+- Runs **100% offline** after the one-time first-run setup
+
+---
+
+## One-time download — works offline forever
+
+The app is designed around a simple idea: **download once, use forever**.
+
+```
+First launch (internet required, one time only)
+  └── Setup Wizard downloads the AI engine: torch + whisperX (~1–3 GB)
+      └── Saved to runtime/ folder next to the app
+          └── Every launch after this: no internet needed, opens instantly
+```
+
+The AI **models** (e.g. large-v2) also download once on first use and are cached locally. After that, transcription works with zero internet connection — even on a plane.
+
+---
+
+## Supported languages
+
+The GUI exposes **17 languages** with a dropdown:
+
+| Language | Code | Language | Code |
+|---|---|---|---|
+| English | `en` | Russian | `ru` |
+| Arabic | `ar` | Portuguese | `pt` |
+| French | `fr` | Italian | `it` |
+| German | `de` | Dutch | `nl` |
+| Spanish | `es` | Polish | `pl` |
+| Chinese | `zh` | Turkish | `tr` |
+| Japanese | `ja` | Persian | `fa` |
+| Korean | `ko` | Urdu | `ur` |
+| Hindi | `hi` | | |
+
+The **Auto-detect** option lets Whisper identify the language automatically — useful when you're not sure or the audio contains multiple languages.
+
+The underlying Whisper model supports **99 languages** in total. The full list is accessible via the CLI (`transcribe.py`) using any [ISO 639-1 language code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes).
 
 ---
 
 ## Who is this for?
 
-- **End users** — download the installer, click through setup, start transcribing
-- **Developers** — clone the repo, run one script, everything installs automatically
-
-Pick your path below.
+- **Journalists and researchers** — transcribe interviews and lectures quickly, with accurate timestamps
+- **Content creators** — generate subtitles for videos in minutes instead of hours
+- **Translators** — get a timestamped base transcript before translating
+- **Students** — transcribe lectures, seminars, and recorded classes
+- **Anyone who handles audio in Arabic, Urdu, Persian, or other non-Latin-script languages** — Whisper handles right-to-left scripts natively
+- **Privacy-conscious users** — nothing is uploaded anywhere, ever
 
 ---
 
 ---
 
-# 👤 For End Users
+# For End Users
 
-> No Python, no terminal, no technical knowledge required.
+> No terminal, no technical knowledge required.
 
-### Step 1 — Download the installer
+### Step 1 — Download
 
 Go to the [**Releases**](../../releases) tab and download:
 
 ```
-WhisperXTranscriber-Setup.exe
+WhisperXTranscriber.zip
 ```
 
-The installer is small (~25 MB). The AI engine downloads separately on first launch.
+The zip is ~19 MB. The AI engine downloads separately on first launch.
 
-### Step 2 — Run the installer
+### Step 2 — Extract and run
 
-- Double-click `WhisperXTranscriber-Setup.exe`
-- **No admin password required** — installs to your user profile
-- A Start Menu shortcut and optional Desktop shortcut are created
+- Extract the zip anywhere (e.g. `C:\Apps\WhisperXTranscriber\`)
+- Double-click `WhisperXTranscriber.exe`
+- **No installer, no admin rights required** — fully portable
 
-### Step 3 — First launch (one-time setup)
+### Step 3 — First launch (one-time setup, internet required)
 
 On first launch, the **Setup Wizard** opens automatically:
 
-```
-┌──────────────────────────────────────────────┐
-│   WhisperX Transcriber — First-time Setup    │
-│                                              │
-│   Step 1: Welcome — what will be downloaded  │
-│   Step 2: GPU check — NVIDIA or CPU mode     │
-│   Step 3: Installing — live progress log     │
-│   Step 4: Done — Launch App                  │
-└──────────────────────────────────────────────┘
-```
+1. **Welcome** — shows what will be downloaded and your GPU status
+2. **Begin Setup** — downloads the AI engine (1–3 GB, takes 5–30 min depending on connection)
+3. **Done** — click Launch. Every future launch opens instantly with no setup
 
-The wizard:
-1. Checks if Python 3.10+ is installed (required — see note below)
-2. Detects your GPU automatically
-3. Downloads and installs the AI engine (~700 MB CPU or ~3 GB GPU)
-4. Every future launch opens instantly — setup only runs once
-
-> **Python is required.** The wizard will prompt you if it's missing.  
-> Install from [python.org](https://www.python.org/downloads/) — tick **"Add Python to PATH"** during install.
+> **Python 3.10+ is required** for the setup wizard to install the AI engine.  
+> The wizard will tell you if it's missing — install from [python.org](https://www.python.org/downloads/) and tick **"Add Python to PATH"**.  
+> After setup is complete, Python is only used internally — you don't need to touch it again.
 
 ### Step 4 — Transcribe
 
-1. Drop an audio or video file into the app
-2. Choose your model and output format
-3. Click **Run**
+1. Click **Files** and select your audio or video file
+2. Go to **Model** to choose model size and device
+3. Go to **Output** to choose your export formats
+4. Click **Run**
+
+The status bar shows each phase: Downloading model → Loading model → Loading audio → Transcribing → Aligning → Saving → Done.
+
+---
 
 ### CPU vs GPU
 
 | | CPU | GPU |
 |---|---|---|
-| First-run download | ~700 MB | ~3 GB |
-| Transcription speed | ~0.5× realtime | ~8–15× realtime |
+| Setup download | ~1 GB | ~2–3 GB |
+| Transcription speed | ~0.3–0.5× realtime | ~8–15× realtime |
 | Hardware required | Any Windows PC | NVIDIA GPU + driver 525+ |
 
-The wizard detects your GPU and selects the right mode automatically. You can override it.
+The wizard detects your GPU automatically. You can override the device in the **Model** panel.
+
+---
 
 ### Models
 
-Models download on first transcription — never bundled in the installer.
+Models download on first use and are cached locally — never re-downloaded.
 
-| Model | Size | Best for |
+| Model | Download size | Best for |
 |---|---|---|
-| `tiny` | ~75 MB | Quick preview |
+| `tiny` | ~75 MB | Quick preview, low accuracy |
 | `base` | ~145 MB | Fast drafts |
-| `small` | ~465 MB | Good balance |
+| `small` | ~465 MB | Good balance of speed and accuracy |
 | `medium` | ~1.5 GB | High accuracy |
-| `large-v2` *(default)* | ~3 GB | Best quality |
-| `large-v3` | ~3 GB | Latest |
+| `large-v2` *(default)* | ~3 GB | Best quality, recommended |
+| `large-v3` | ~3 GB | Latest version of large |
+
+Start with `large-v2` unless you need faster results or have limited disk space.
+
+---
 
 ### Output formats
 
 | Format | Description |
 |---|---|
-| `word_json` | Per-word `{word, start, end, score}` — for developers |
-| `srt` | Standard subtitles (works in VLC, YouTube, etc.) |
-| `vtt` | WebVTT subtitles |
-| `txt` | Plain text transcript |
-| `tsv` | Tab-separated with timestamps |
-| `json` | Full segment JSON |
+| `word_json` | Per-word `{word, start, end, score}` — for developers and downstream tools |
+| `srt` | Standard subtitles — works in VLC, YouTube, Premiere, DaVinci Resolve |
+| `vtt` | WebVTT subtitles — for web video players |
+| `txt` | Plain text transcript — no timestamps |
+| `tsv` | Tab-separated with start/end timestamps per segment |
+| `json` | Full segment-level JSON with all metadata |
+
+Multiple formats can be selected at once. All are saved to the same output folder.
+
+---
 
 ### Troubleshooting
 
-**"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH".
+**"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH". Then re-run the app.
 
-**Setup wizard fails mid-download** — Click **Retry**. It cleans up and starts fresh.
+**Setup fails mid-download** — Click **Retry**. The wizard resumes where it left off and skips already-installed packages.
 
-**CUDA out of memory** — Lower the Batch Size in the Model panel (try 4 or 8).
+**CUDA out of memory** — Lower Batch Size in the Model panel. Try 8, then 4.
 
-**Alignment fails** — Disable word alignment in the Output panel. SRT/VTT still export.
+**Alignment fails** — Disable word alignment in the Output panel. All other formats (SRT, VTT, TXT, etc.) still export without it.
 
-**Anything else** — Open a [GitHub issue](../../issues) and paste the log output.
+**Transcription is slow on CPU** — Use a smaller model (`small` or `base`), or reduce Batch Size.
+
+**Anything else** — Open a [GitHub issue](../../issues) and paste the log output (click **Log** in the sidebar).
 
 ---
 
 ---
 
-# 🛠️ For Developers
+# For Developers
 
 > Clone, run one script, and you're in.
 
@@ -150,8 +209,9 @@ bash run.sh      # macOS / Linux
 ```
 
 `run.bat` / `run.sh` does everything on first run:
+
 1. Creates a `.venv` virtual environment
-2. Detects your GPU and installs the right PyTorch build
+2. Detects your GPU and installs the correct PyTorch build
 3. Installs WhisperX and all UI dependencies
 4. Launches the app
 
@@ -164,25 +224,40 @@ whisperx-transcriber/
 │
 ├── app.py                  Main GUI application
 ├── launcher.py             Thin entry point used by the packaged .exe
-├── setup_wizard.py         First-run wizard (used by launcher.exe, not run.bat)
-├── transcribe.py           Headless CLI tool
+├── setup_wizard.py         First-run wizard (runs inside the packaged .exe)
+├── transcribe.py           Headless CLI tool for scripting and batch use
 │
 ├── run.bat                 Windows developer launcher
 ├── run.sh                  macOS / Linux developer launcher
 │
 ├── requirements-cpu.txt    PyTorch CPU wheels
-├── requirements-gpu.txt    PyTorch CUDA 12.1 wheels
+├── requirements-gpu.txt    PyTorch CUDA wheels
 ├── requirements-core.txt   whisperx, customtkinter, Pillow
 ├── requirements-build.txt  Build tools (pyinstaller)
 │
 ├── packaging/
-│   ├── build.bat           Builds the thin launcher exe + runs Inno Setup
+│   ├── build.bat           Builds the thin launcher exe + creates portable zip
 │   ├── launcher.spec       PyInstaller spec — GUI only, no ML packages
-│   └── installer.iss       Inno Setup script — produces the .exe installer
+│   └── installer.iss       Inno Setup script (unused — kept for reference)
 │
 └── assets/
-    └── screenshot.png      App screenshot for README
+    └── icon.ico            App icon
 ```
+
+### Architecture — thin launcher pattern
+
+The packaged `.exe` is intentionally tiny (~19 MB) because it contains **no AI packages at all**:
+
+```
+WhisperXTranscriber.exe  (PyInstaller onedir)
+  └── Python runtime
+  └── customtkinter + Pillow  (GUI only)
+  └── setup_wizard (frozen inside)
+      └── On first run: pip-installs whisperx + torch into runtime/
+          └── On all later runs: spawns runtime/python app.py
+```
+
+This avoids bundling gigabytes of ML libraries into the exe, and means updates to the AI engine don't require a new download of the whole app.
 
 ### Manual install (without run.bat)
 
@@ -194,7 +269,7 @@ python -m venv .venv
 # CPU only
 .venv\Scripts\pip install -r requirements-cpu.txt
 
-# Then install the app dependencies
+# App dependencies
 .venv\Scripts\pip install -r requirements-core.txt
 
 # Launch
@@ -203,39 +278,35 @@ python -m venv .venv
 
 ### CLI usage (transcribe.py)
 
-For scripting or batch processing without the GUI:
+For scripting, batch processing, or accessing all 99 supported languages:
 
 ```bash
 python transcribe.py audio.mp3
-python transcribe.py audio.mp3 --language en --model large-v2
+python transcribe.py audio.mp3 --language ar --model large-v2
 python transcribe.py audio.mp3 --device cpu --output srt
-python transcribe.py audio.mp3 --model-dir /path/to/models
+python transcribe.py audio.mp3 --model-dir D:\models
 ```
 
 Options:
 
 ```
 --model       tiny, base, small, medium, large-v2, large-v3  (default: large-v2)
---language    en, ar, fr, de, es, zh, ja, ...               (default: auto-detect)
---device      cuda, cpu                                      (default: auto-detect)
---output      word_json, srt, vtt, txt, tsv, json           (default: word_json)
---model-dir   path to model cache                           (default: ./Models)
+--language    any ISO 639-1 code, e.g. en, ar, fr, ur, fa    (default: auto-detect)
+--device      cuda, cpu                                       (default: auto-detect)
+--output      word_json, srt, vtt, txt, tsv, json            (default: word_json)
+--model-dir   path to model cache                            (default: ./Models)
 ```
 
-### Building the installer
+### Building the release zip
 
 See [PACKAGING.md](PACKAGING.md) for the full guide. Quick version:
 
 ```bash
-# 1. Build the thin launcher exe (requires .venv to exist)
+# Requires .venv to exist (run run.bat once first)
 packaging\build.bat
-
-# 2. Build the installer (requires Inno Setup 6)
-# build.bat runs this automatically if ISCC.exe is found
-# Otherwise: download from https://jrsoftware.org/isdl.php
 ```
 
-Output: `dist/installer/WhisperXTranscriber-Setup.exe`
+Output: `dist/release/WhisperXTranscriber.zip`
 
 ---
 
@@ -249,15 +320,15 @@ Output: `dist/installer/WhisperXTranscriber-Setup.exe`
 | Transcription | [WhisperX](https://github.com/m-bain/whisperX) |
 | ASR backend | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
 | Inference runtime | [CTranslate2](https://github.com/OpenNMT/CTranslate2) |
-| Packaging | [PyInstaller](https://pyinstaller.org/) + [Inno Setup 6](https://jrsoftware.org/isinfo.php) |
+| Packaging | [PyInstaller](https://pyinstaller.org/) |
 
 ## Roadmap
 
-- [ ] Speaker diarization UI
-- [ ] Batch folder transcription
 - [ ] Drag-and-drop file input
+- [ ] Batch folder transcription
+- [ ] Speaker diarization UI
+- [ ] Translation mode (transcribe + translate to English)
 - [ ] macOS `.app` bundle
-- [ ] Translation mode
 
 ## License
 
