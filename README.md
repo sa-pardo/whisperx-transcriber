@@ -16,6 +16,22 @@ Built on [WhisperX](https://github.com/m-bain/whisperX) and [faster-whisper](htt
 
 ---
 
+## Quick Access
+
+**Overview**
+[Why use this?](#why-use-this) · [Interface](#interface) · [What it does](#what-it-does) · [Sample output](#sample-output) · [Supported languages](#supported-languages) · [Who is this for?](#who-is-this-for)
+
+**For End Users**
+[Download & install](#for-end-users) · [First-time setup](#step-3--first-launch-one-time-setup) · [CPU vs GPU](#cpu-vs-gpu) · [Models](#models) · [Output formats](#output-formats) · [Troubleshooting](#troubleshooting)
+
+**For Developers**
+[Quick start](#quick-start) · [Project structure](#project-structure) · [Architecture](#architecture--thin-launcher-pattern) · [Build release zip](#building-the-release-zip) · [CLI usage](#cli-usage)
+
+**Project**
+[Roadmap](#roadmap) · [Support the Project](#support-the-project) · [Contributing](#contributing) · [Tech stack](#tech-stack) · [License](#license)
+
+---
+
 ## Why use this?
 
 Most transcription tools are either expensive cloud services that send your audio to someone else's server, or complex Python scripts that require technical setup. WhisperX Transcriber is neither.
