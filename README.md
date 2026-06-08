@@ -86,7 +86,6 @@ Four clean panels — everything is a click away, nothing is buried.
 - Auto-detects your **NVIDIA GPU** and uses CUDA — falls back to CPU automatically
 - Strips silence with a built-in **Voice Activity Detection (VAD)** filter
 - Produces **karaoke-style subtitles** with word-by-word highlighting in SRT/VTT
-- Shows a **live progress bar** while files download, and lets you **cancel** a run at any time
 - Runs **100% offline** after the one-time first-run setup
 
 ---
@@ -263,7 +262,7 @@ Head to the [**Releases**](../../releases) tab and grab the latest `WhisperXTran
     </td>
     <td align="center">
       <img src="assets/screenshots/Setup_Ongoing.png" width="360" alt="Setup wizard installing"/><br/>
-      <sub>The AI engine downloads with a live progress bar — and this only ever happens once</sub>
+      <sub>The AI engine downloads on first launch, and this only ever happens once</sub>
     </td>
   </tr>
 </table>
@@ -274,7 +273,7 @@ On first launch, a **Setup Wizard** opens and does all the heavy lifting for you
 - **Audio tools** — needed to read your audio and video files (installed automatically)
 - **Python** — the software the engine runs on (only installed if you don't already have it)
 
-You don't have to make any choices or click through anything — it just runs. A **live progress bar shows exactly how much has downloaded and how much is left**, so you're never left guessing. This whole step happens only once; every launch after this opens instantly.
+You don't have to make any choices or click through anything — it just runs. This whole step happens only once; every launch after this opens instantly.
 
 > [!TIP]
 > Prefer to install Python yourself? Get it from [python.org/downloads](https://www.python.org/downloads/) and tick **"Add Python to PATH"** on the first screen.
@@ -503,16 +502,8 @@ python transcribe.py audio.mp3 --model-dir D:\models
 
 This project is built and maintained by a single developer — a working student engineer doing part-time research. Development happens in spare time, but the vision is clear and the roadmap is real.
 
-### Recently shipped
-
-- ✅ **Automatic FFmpeg setup** — audio tools now install themselves, fixing a "file not found" error some users hit
-- ✅ **Real-time download progress** — every download (Python, AI engine, models) shows a live progress bar with megabytes and percentage
-- ✅ **Cancel any time** — stop a transcription or download mid-run without closing the app
-- ✅ **Automatic Python install** — the wizard sets up Python for you if it's missing
-
 ### Up next
 
-- **Live progress while transcribing** — a percent-complete bar for the transcription step itself (downloads already show real-time progress)
 - **macOS `.app` bundle** — a proper portable build for Mac, same thin-launcher pattern
 
 ### On the roadmap
