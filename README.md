@@ -19,7 +19,7 @@ Word-level timestamps. 99 languages. No cloud. No subscription. Free forever.
 &nbsp;&nbsp;·&nbsp;&nbsp;
 [❤️ Sponsor](https://github.com/sponsors/ibrahimqureshae)
 
-![WhisperX Transcriber screenshot](assets/screenshots/Transcribe.png)
+![WhisperX Transcriber screenshot](assets/screenshots/Screenshot_new_ui.png)
 
 </div>
 
@@ -107,30 +107,13 @@ The **Setup Wizard** opens automatically:
 
 ## What the app looks like
 
-Four clean panels — everything is a click away, nothing is buried.
+One clean screen — file, language, model, output formats, and options all in one place. Nothing is buried.
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="assets/screenshots/Transcribe.png" width="420" alt="Transcribe panel"/><br/>
-      <sub><b>Transcribe</b> — pick your file and language</sub>
-    </td>
-    <td align="center">
-      <img src="assets/screenshots/Quality.png" width="420" alt="Quality panel"/><br/>
-      <sub><b>Quality</b> — model, precision, device, expert tuning</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="assets/screenshots/Save.png" width="420" alt="Save panel"/><br/>
-      <sub><b>Save</b> — export formats, word timestamps, silence removal</sub>
-    </td>
-    <td align="center">
-      <img src="assets/screenshots/Settings.png" width="420" alt="Settings panel"/><br/>
-      <sub><b>Settings</b> — silence detection, subtitle formatting, model folder</sub>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="assets/screenshots/Screenshot_new_ui.png" width="640" alt="WhisperX Transcriber main window"/>
+</p>
+
+Advanced settings (precision, performance tuning, silence detection, subtitle formatting, and model storage) live behind the ⚙ tab, so the main view stays focused on getting your transcript.
 
 ---
 

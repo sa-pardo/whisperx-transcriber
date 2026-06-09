@@ -2,6 +2,20 @@
 
 All notable changes to WhisperX Transcriber are documented here.
 
+## [v1.2.0] — 2026-06-09
+
+### Added
+- **Instant Cancel** — transcription now runs in a separate process that is
+  terminated immediately when you click Cancel, instead of waiting for the
+  current stage to finish.
+
+### Changed
+- **Redesigned interface** — consolidated into a single, fixed-size Transcribe
+  screen: file, language, model, device, output formats, save location, and
+  options are all in one place. Advanced settings moved behind a dedicated tab.
+- Cleaner dropdowns, improved text contrast and readability throughout.
+- Activity log now appears only while a job is running and auto-hides when done.
+
 ## [v1.1.4] — 2026-06-09
 
 ### Changed

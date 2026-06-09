@@ -1,10 +1,8 @@
 import os
 import sys
 import json
-import time
 import queue
 import threading
-import traceback
 import subprocess
 import webbrowser
 import customtkinter as ctk
@@ -47,15 +45,15 @@ _DROP    = ("#f0f0f0", "#1e1e1e")
 _PRI     = ("#111111", "#ffffff")
 _LOGO_S  = ("#888888", "#888888")
 _NAV_OF  = ("#777777", "#666666")
-_LABEL   = ("#444444", "#888888")
-_HINT    = ("#999999", "#666666")
-_SECHI   = ("#777777", "#666666")
-_STAT    = ("#444444", "#888888")
-_LOG_H   = ("#555555", "#666666")
-_LOG_B   = ("#111111", "#c0c0c0")
-_FMT_N   = ("#111111", "#dddddd")
-_FMT_D   = ("#666666", "#777777")
-_TOGG_L  = ("#333333", "#cccccc")
+_LABEL   = ("#3a3a3a", "#b0b0b0")
+_HINT    = ("#6e6e6e", "#8c8c8c")
+_SECHI   = ("#5a5a5a", "#9a9a94")
+_STAT    = ("#3a3a3a", "#b0b0b0")
+_LOG_H   = ("#555555", "#8c8c8c")
+_LOG_B   = ("#111111", "#d4d4d4")
+_FMT_N   = ("#1a1a1a", "#e4e4e4")
+_FMT_D   = ("#666666", "#8c8c8c")
+_TOGG_L  = ("#1a1a1a", "#e0e0e0")
 _DIM_TXT = ("#999999", "#888888")
 _MAC_TXT = ("#2a7a2a", "#3a7a3a")
 
@@ -96,86 +94,25 @@ def _available_devices():
 
 
 # ── Reusable UI builders ──────────────────────────────────────────────────────
-def card(parent, title=None):
-    f = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
-    f.grid_columnconfigure(0, weight=1)
-    if title:
-        ctk.CTkLabel(f, text=title.upper(),
-                     font=F(9, "bold"), text_color=_SECHI
-                     ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 0))
-    return f
-
-
-def section_title(parent, title, subtitle, row):
-    ctk.CTkLabel(parent, text=title, font=F(20, "bold"),
-                 text_color=_PRI).grid(row=row, column=0, sticky="w",
-                                       pady=(0, 3))
-    ctk.CTkLabel(parent, text=subtitle, font=F(12),
-                 text_color=_HINT).grid(row=row + 1, column=0, sticky="w",
-                                        pady=(0, 18))
-
-
-def labeled_widget(parent, label, widget, row, hint=None):
-    ctk.CTkLabel(parent, text=label, font=F(12),
-                 text_color=_LABEL).grid(row=row, column=0, columnspan=2,
-                                         sticky="w", padx=16,
-                                         pady=(12 if row == 1 else 4, 2))
-    widget.grid(row=row + 1, column=0, columnspan=2, sticky="ew",
-                padx=16, pady=(0, 4 if hint else 0))
-    if hint:
-        ctk.CTkLabel(parent, text=hint, font=F(10),
-                     text_color=_HINT).grid(row=row + 2, column=0,
-                                             columnspan=2, sticky="w",
-                                             padx=16, pady=(0, 4))
-
-
-def browse_row(parent, label, var, cmd, row):
-    ctk.CTkLabel(parent, text=label, font=F(12),
-                 text_color=_LABEL).grid(row=row, column=0, columnspan=2,
-                                         sticky="w", padx=16,
-                                         pady=(12 if row == 0 else 4, 2))
-    e = ctk.CTkEntry(parent, textvariable=var, font=F(12), height=36,
-                     corner_radius=8, fg_color=_ENTRY,
-                     border_color=_BORDER, border_width=1)
-    e.grid(row=row + 1, column=0, sticky="ew", padx=(16, 6), pady=(0, 12))
-    ctk.CTkButton(parent, text="...", width=42, height=36, corner_radius=8,
-                  fg_color=_MID, hover_color=_MIDHOV,
-                  font=F(14), command=cmd
-                  ).grid(row=row + 1, column=1, padx=(0, 16), pady=(0, 12))
-
-
 def combo(parent, var, values, width=None):
-    kw = dict(variable=var, values=values, state="readonly", height=36,
-              corner_radius=8, fg_color=_ENTRY, border_color=_BORDER,
-              button_color=_MID, button_hover_color=_MIDHOV,
-              dropdown_fg_color=_DROP, font=F(12))
+    kw = dict(variable=var, values=values, height=38, corner_radius=8,
+              fg_color=_ENTRY, button_color=_MID, button_hover_color=_MIDHOV,
+              dropdown_fg_color=_DROP, dropdown_hover_color=_NAVHOV,
+              dropdown_text_color=_PRI, text_color=_PRI,
+              font=F(13), dropdown_font=F(12),
+              dynamic_resizing=False, anchor="w")
     if width:
         kw["width"] = width
-    return ctk.CTkComboBox(parent, **kw)
+    return ctk.CTkOptionMenu(parent, **kw)
 
 
 def entry(parent, var, width=None, placeholder=""):
-    kw = dict(textvariable=var, font=F(12), height=36, corner_radius=8,
+    kw = dict(textvariable=var, font=F(13), height=38, corner_radius=8,
               fg_color=_ENTRY, border_color=_BORDER, border_width=1,
-              placeholder_text=placeholder)
+              text_color=_PRI, placeholder_text=placeholder)
     if width:
         kw["width"] = width
     return ctk.CTkEntry(parent, **kw)
-
-
-def toggle_row(parent, label, sub, var, row):
-    f = ctk.CTkFrame(parent, fg_color="transparent")
-    f.grid(row=row, column=0, columnspan=2, sticky="ew",
-           padx=16, pady=(8, 8))
-    f.grid_columnconfigure(0, weight=1)
-    ctk.CTkLabel(f, text=label, font=F(12),
-                 text_color=_TOGG_L).grid(row=0, column=0, sticky="w")
-    ctk.CTkLabel(f, text=sub, font=F(10),
-                 text_color=_HINT).grid(row=1, column=0, sticky="w")
-    ctk.CTkSwitch(f, text="", variable=var, width=44,
-                  button_color="#4a9eff",
-                  progress_color="#4a9eff").grid(row=0, column=1, rowspan=2,
-                                                  padx=(12, 0))
 
 
 # ── Main App ──────────────────────────────────────────────────────────────────
@@ -183,19 +120,56 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("WhisperX")
-        self.geometry("920x660")
-        self.minsize(820, 580)
+        self.geometry("720x640")
+        self.resizable(False, False)
 
         self._stop       = threading.Event()
         self._q          = queue.Queue()
         self._panels     = {}
         self._nav_key    = None
         self._device_combo = None  # populated by background probe
+        self._proc       = None    # running transcription subprocess
+
+        # All StringVars / BooleanVars — created here so any panel can use them
+        self.v_file       = ctk.StringVar()
+        self.v_lang       = ctk.StringVar(value="Auto-detect")
+        self.v_model      = ctk.StringVar(value="large-v2")
+        self.v_device     = ctk.StringVar(value="auto")
+        self.v_compute    = ctk.StringVar(value="int8" if IS_MAC else "float16")
+        self.v_batch      = ctk.StringVar(value="8" if IS_MAC else "16")
+        self.v_beam       = ctk.StringVar(value="5")
+        self.v_chunk      = ctk.StringVar(value="30")
+        self.v_out_dir    = ctk.StringVar()
+        self.v_fmts       = {
+            "srt":       ctk.BooleanVar(value=True),
+            "vtt":       ctk.BooleanVar(value=False),
+            "txt":       ctk.BooleanVar(value=False),
+            "tsv":       ctk.BooleanVar(value=False),
+            "json":      ctk.BooleanVar(value=False),
+            "word_json": ctk.BooleanVar(value=False),
+        }
+        self.v_align      = ctk.BooleanVar(value=True)
+        self.v_vad        = ctk.BooleanVar(value=True)
+        self.v_vad_onset  = ctk.StringVar(value="0.500")
+        self.v_vad_offset = ctk.StringVar(value="0.363")
+        self.v_highlight  = ctk.BooleanVar(value=False)
+        self.v_max_width  = ctk.StringVar(value="")
+        self.v_max_count  = ctk.StringVar(value="")
+        self.v_model_dir  = ctk.StringVar(value=_default_model_dir())
+        self._lang_map    = {
+            "Auto-detect": "auto", "English": "en", "Arabic": "ar",
+            "Chinese": "zh", "Dutch": "nl", "French": "fr",
+            "Georgian": "ka", "German": "de", "Hindi": "hi",
+            "Italian": "it", "Japanese": "ja", "Korean": "ko",
+            "Pashto": "ps", "Persian": "fa", "Polish": "pl",
+            "Portuguese": "pt", "Russian": "ru", "Spanish": "es",
+            "Turkish": "tr", "Urdu": "ur",
+        }
 
         self._build()
         self._setup_icon()
         self._poll_log()
-        self._nav("Files")
+        self._nav("Transcribe")
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         if IS_MAC:
             self.createcommand("tk::mac::Quit", self._on_close)
@@ -281,7 +255,7 @@ class App(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        self._sb = ctk.CTkFrame(self, width=210, corner_radius=0,
+        self._sb = ctk.CTkFrame(self, width=64, corner_radius=0,
                                 fg_color=_SB)
         self._sb.grid(row=0, column=0, rowspan=2, sticky="nsew")
         self._sb.grid_propagate(False)
@@ -304,379 +278,322 @@ class App(ctk.CTk):
 
     def _build_sidebar(self):
         sb = self._sb
+        sb.grid_columnconfigure(0, weight=1)
 
-        logo = ctk.CTkFrame(sb, fg_color="transparent")
-        logo.grid(row=0, column=0, sticky="ew", padx=20, pady=(28, 0))
-        ctk.CTkLabel(logo, text="WhisperX", font=F(17, "bold"),
-                     text_color=_PRI).pack(anchor="w")
-        ctk.CTkLabel(logo, text="Transcriber", font=F(11),
-                     text_color=_LOGO_S).pack(anchor="w")
+        ctk.CTkLabel(sb, text="W", font=F(20, "bold"),
+                     text_color="#4a9eff",
+                     width=64, height=52).grid(row=0, column=0)
 
         ctk.CTkFrame(sb, height=1, fg_color=_SEP).grid(
-            row=1, column=0, sticky="ew", padx=16, pady=(20, 12))
+            row=1, column=0, sticky="ew", padx=10, pady=(0, 6))
 
         self._nav_btns = {}
-        for i, (key, label) in enumerate([
-            ("Files",    "  Transcribe"),
-            ("Model",    "  Quality"),
-            ("Output",   "  Save"),
-            ("Advanced", "  Settings"),
+        for i, (key, icon) in enumerate([
+            ("Transcribe", "▶"),
+            ("Settings",   "⚙"),
         ], start=2):
             btn = ctk.CTkButton(
-                sb, text=label, anchor="w", font=F(13), height=40,
-                corner_radius=9, fg_color="transparent",
+                sb, text=icon, width=44, height=44,
+                corner_radius=10, fg_color="transparent",
                 hover_color=_NAVHOV, text_color=_NAV_OF,
-                command=lambda k=key: self._nav(k),
+                font=F(17), command=lambda k=key: self._nav(k),
             )
-            btn.grid(row=i, column=0, sticky="ew", padx=10, pady=1)
+            btn.grid(row=i, column=0, pady=2)
             self._nav_btns[key] = btn
-
-        ctk.CTkFrame(sb, height=1, fg_color=_SEP).grid(
-            row=7, column=0, sticky="ew", padx=16, pady=(14, 10))
-
-        self._log_btn = ctk.CTkButton(
-            sb, text="  Activity", anchor="w", font=F(13), height=40,
-            corner_radius=9, fg_color="transparent",
-            hover_color=_NAVHOV, text_color=_PRI,
-            command=self._toggle_log,
-        )
-        self._log_btn.grid(row=8, column=0, sticky="ew", padx=10, pady=1)
-
-        ctk.CTkButton(
-            sb, text="  ♥  Support", anchor="w", font=F(12), height=36,
-            corner_radius=9, fg_color="transparent",
-            hover_color=_NAVHOV, text_color=("#c44569", "#e05c8a"),
-            command=self._show_support,
-        ).grid(row=9, column=0, sticky="ew", padx=10, pady=(1, 0))
 
         ctk.CTkFrame(sb, fg_color="transparent").grid(row=10, column=0,
                                                       sticky="nsew")
 
         ctk.CTkFrame(sb, height=1, fg_color=_SEP).grid(
-            row=11, column=0, sticky="ew", padx=16, pady=(0, 12))
-        tf = ctk.CTkFrame(sb, fg_color="transparent")
-        tf.grid(row=12, column=0, sticky="ew", padx=16, pady=(0, 24))
-        tf.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(tf, text="Dark mode", font=F(11),
-                     text_color=_LOGO_S).grid(row=0, column=0, sticky="w")
-        self._theme_sw = ctk.CTkSwitch(tf, text="", width=44,
+            row=11, column=0, sticky="ew", padx=10, pady=(0, 8))
+
+        ctk.CTkButton(
+            sb, text="♥", width=44, height=44,
+            corner_radius=10, fg_color="transparent",
+            hover_color=_NAVHOV, text_color=("#c44569", "#e05c8a"),
+            font=F(17), command=self._show_support,
+        ).grid(row=12, column=0, pady=2)
+
+        self._theme_sw = ctk.CTkSwitch(sb, text="", width=44,
                                        button_color="#4a9eff",
                                        progress_color="#4a9eff",
                                        command=self._toggle_theme)
-        self._theme_sw.grid(row=0, column=1)
+        self._theme_sw.grid(row=13, column=0, pady=(4, 18))
         self._theme_sw.select()
 
     # ── Content panels ────────────────────────────────────────────────────────
 
     def _build_content(self):
-        scroll = ctk.CTkScrollableFrame(
-            self._content_wrap, fg_color="transparent",
-            corner_radius=0, scrollbar_button_color=_SCRL_B,
-            scrollbar_button_hover_color=_SCRL_H)
-        scroll.grid(row=0, column=0, sticky="nsew")
-        scroll.grid_columnconfigure(0, weight=1)
-        self._scroll = scroll
+        body = ctk.CTkFrame(self._content_wrap, fg_color="transparent",
+                            corner_radius=0)
+        body.grid(row=0, column=0, sticky="nsew")
+        body.grid_columnconfigure(0, weight=1)
+        body.grid_rowconfigure(0, weight=1)
+        self._body = body
 
-        self._panels["Files"]    = self._panel_files(scroll)
-        self._panels["Model"]    = self._panel_model(scroll)
-        self._panels["Output"]   = self._panel_output(scroll)
-        self._panels["Advanced"] = self._panel_advanced(scroll)
+        self._panels["Transcribe"] = self._panel_transcribe(body)
+        self._panels["Settings"]   = self._panel_settings(body)
 
+        # Activity log — overlays the bottom of the content area on demand.
+        # Lives in the SAME grid cell as `body` so showing it never resizes
+        # the panel; it's just lifted on top and anchored to the bottom.
         self._log_wrap = ctk.CTkFrame(self._content_wrap, fg_color=_BAR,
-                                      corner_radius=0, height=220)
-        self._log_wrap.grid(row=1, column=0, sticky="ew")
+                                      corner_radius=0, height=200,
+                                      border_width=1, border_color=_SEP)
         self._log_wrap.grid_propagate(False)
         self._log_wrap.grid_columnconfigure(0, weight=1)
-        self._log_wrap.grid_rowconfigure(2, weight=1)
-
-        ctk.CTkFrame(self._log_wrap, height=1, fg_color=_SEP,
-                     corner_radius=0).grid(row=0, column=0, sticky="ew")
+        self._log_wrap.grid_rowconfigure(1, weight=1)
 
         lh = ctk.CTkFrame(self._log_wrap, fg_color=_BAR,
-                          corner_radius=0, height=28)
-        lh.grid(row=1, column=0, sticky="ew")
+                          corner_radius=0, height=32)
+        lh.grid(row=0, column=0, sticky="ew")
         lh.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(lh, text="  ACTIVITY", font=F(9, "bold"),
+        ctk.CTkLabel(lh, text="   ACTIVITY", font=F(10, "bold"),
                      text_color=_LOG_H).grid(row=0, column=0, sticky="w",
-                                              pady=5)
-        ctk.CTkButton(lh, text="Clear", width=52, height=22, font=F(10),
+                                              pady=6)
+        btn_frame = ctk.CTkFrame(lh, fg_color="transparent")
+        btn_frame.grid(row=0, column=1, padx=8, pady=4)
+        ctk.CTkButton(btn_frame, text="Clear", width=50, height=24, font=F(11),
                       fg_color="transparent", hover_color=_NAVACT,
                       text_color=_NAV_OF,
-                      command=self._clear_log).grid(row=0, column=1,
-                                                     padx=8, pady=3)
+                      command=self._clear_log).pack(side="left")
+        ctk.CTkButton(btn_frame, text="✕", width=30, height=24, font=F(12),
+                      fg_color="transparent", hover_color=_NAVACT,
+                      text_color=_NAV_OF,
+                      command=self._hide_log).pack(side="left", padx=(2, 0))
 
         self.log_area = ctk.CTkTextbox(
-            self._log_wrap, font=FM(10), fg_color=_BAR,
+            self._log_wrap, font=FM(11), fg_color=_BAR,
             text_color=_LOG_B, corner_radius=0, state="disabled",
             scrollbar_button_color=_SCRL_B)
-        self.log_area.grid(row=2, column=0, sticky="nsew")
+        self.log_area.grid(row=1, column=0, sticky="nsew", padx=2, pady=(0, 2))
 
-        self._log_visible = True
+        self._log_visible = False
 
-    # ── Files panel ───────────────────────────────────────────────────────────
+    # ── Transcribe panel — everything needed to run a job ─────────────────────
 
-    def _panel_files(self, parent):
+    def _panel_transcribe(self, parent):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        section_title(p, "Transcribe",
-                      "Select your media file and set the transcription language.", 0)
+        def glabel(text, row, top=14):
+            ctk.CTkLabel(p, text=text, font=F(10, "bold"),
+                         text_color=_SECHI).grid(
+                row=row, column=0, sticky="w", pady=(top, 6))
 
-        c1 = card(p, "Media File")
-        c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        c1.grid_columnconfigure(0, weight=1)
-        self.v_file = ctk.StringVar()
-        browse_row(c1, "Audio or Video File", self.v_file, self._browse_file, 0)
+        # ── Header ─────────────────────────────────────────────────────────────
+        ctk.CTkLabel(p, text="Transcribe", font=F(20, "bold"),
+                     text_color=_PRI).grid(row=0, column=0, sticky="w",
+                                            pady=(0, 12))
 
-        c2 = card(p, "Language")
-        c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        c2.grid_columnconfigure(0, weight=1)
-        self._lang_map = {
-            "Auto-detect":  "auto",
-            "English":      "en",
-            "Arabic":       "ar",
-            "Chinese":      "zh",
-            "Dutch":        "nl",
-            "French":       "fr",
-            "Georgian":     "ka",
-            "German":       "de",
-            "Hindi":        "hi",
-            "Italian":      "it",
-            "Japanese":     "ja",
-            "Korean":       "ko",
-            "Pashto":       "ps",
-            "Persian":      "fa",
-            "Polish":       "pl",
-            "Portuguese":   "pt",
-            "Russian":      "ru",
-            "Spanish":      "es",
-            "Turkish":      "tr",
-            "Urdu":         "ur",
-        }
-        self.v_lang = ctk.StringVar(value="Auto-detect")
-        ctk.CTkLabel(c2, text="Spoken language in the audio",
-                     font=F(10), text_color=_HINT).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(10, 4))
-        combo(c2, self.v_lang,
-              list(self._lang_map.keys()),
-              width=200).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
+        # ── Media file box ─────────────────────────────────────────────────────
+        fb = ctk.CTkFrame(p, fg_color=_CARD, corner_radius=10,
+                          border_width=1, border_color=_BORDER)
+        fb.grid(row=1, column=0, sticky="ew")
+        fb.grid_columnconfigure(0, weight=1)
+        self._file_name_lbl = ctk.CTkLabel(
+            fb, text="No file selected", font=F(13),
+            text_color=_HINT, anchor="w", wraplength=480, justify="left")
+        self._file_name_lbl.grid(row=0, column=0, sticky="w",
+                                  padx=14, pady=(11, 0))
+        self._file_meta_lbl = ctk.CTkLabel(
+            fb, text="Choose an audio or video file to get started",
+            font=F(10), text_color=_HINT, anchor="w")
+        self._file_meta_lbl.grid(row=1, column=0, sticky="w",
+                                  padx=14, pady=(0, 11))
+        ctk.CTkButton(
+            fb, text="Browse", width=88, height=34, corner_radius=8,
+            fg_color="#4a9eff", hover_color="#6ab0ff", text_color="#ffffff",
+            font=F(12, "bold"), command=self._browse_file,
+        ).grid(row=0, column=1, rowspan=2, padx=(8, 11))
+
+        # ── Language / Model / Device ──────────────────────────────────────────
+        glabel("LANGUAGE & MODEL", 2)
+        row3 = ctk.CTkFrame(p, fg_color="transparent")
+        row3.grid(row=3, column=0, sticky="ew")
+        row3.grid_columnconfigure((0, 1, 2), weight=1)
+        for col, (var, vals, setter) in enumerate([
+            (self.v_lang, list(self._lang_map.keys()), None),
+            (self.v_model,
+             ["tiny", "tiny.en", "base", "base.en", "small", "small.en",
+              "medium", "medium.en", "large-v1", "large-v2", "large-v3"], None),
+            (self.v_device, ["auto", "cpu"], "device"),
+        ]):
+            cb = combo(row3, var, vals)
+            cb.grid(row=0, column=col, sticky="ew",
+                    padx=(0 if col == 0 else 5, 5 if col == 0 else 0))
+            if setter == "device":
+                self._device_combo = cb
+
+        # ── Output formats ─────────────────────────────────────────────────────
+        glabel("OUTPUT FORMATS", 4)
+        fmt_row = ctk.CTkFrame(p, fg_color="transparent")
+        fmt_row.grid(row=5, column=0, sticky="w")
+        self._fmt_chips = {}
+        for col, (key, label) in enumerate([
+            ("srt", "SRT"), ("vtt", "VTT"), ("txt", "TXT"),
+            ("tsv", "TSV"), ("json", "JSON"), ("word_json", "Word JSON"),
+        ]):
+            btn = ctk.CTkButton(
+                fmt_row, text=label,
+                width=82 if key == "word_json" else 60,
+                height=32, corner_radius=8, font=F(11, "bold"),
+                command=lambda k=key: self._toggle_fmt(k))
+            btn.grid(row=0, column=col, padx=(0, 7))
+            self._fmt_chips[key] = btn
+            self._update_fmt_chip(key)
+
+        # ── Save location ──────────────────────────────────────────────────────
+        glabel("SAVE TO", 6)
+        save_row = ctk.CTkFrame(p, fg_color="transparent")
+        save_row.grid(row=7, column=0, sticky="ew")
+        save_row.grid_columnconfigure(0, weight=1)
+        entry(save_row, self.v_out_dir).grid(row=0, column=0, sticky="ew",
+                                             padx=(0, 6))
+        ctk.CTkButton(save_row, text="...", width=42, height=36,
+                      corner_radius=8, fg_color=_MID, hover_color=_MIDHOV,
+                      font=F(14), command=self._browse_out_dir).grid(
+            row=0, column=1)
+
+        # ── Options (compact toggles) ──────────────────────────────────────────
+        glabel("OPTIONS", 8)
+        opt = ctk.CTkFrame(p, fg_color="transparent")
+        opt.grid(row=9, column=0, sticky="ew")
+        opt.grid_columnconfigure((0, 1), weight=1)
+        for col, (lbl, var) in enumerate([
+            ("Word timestamps", self.v_align),
+            ("Remove silence",  self.v_vad),
+        ]):
+            cell = ctk.CTkFrame(opt, fg_color=_CARD, corner_radius=8)
+            cell.grid(row=0, column=col, sticky="ew",
+                      padx=(0, 5) if col == 0 else (5, 0))
+            cell.grid_columnconfigure(0, weight=1)
+            ctk.CTkLabel(cell, text=lbl, font=F(12),
+                         text_color=_TOGG_L).grid(row=0, column=0,
+                                                   sticky="w", padx=12, pady=11)
+            ctk.CTkSwitch(cell, text="", variable=var, width=42,
+                          button_color="#4a9eff",
+                          progress_color="#4a9eff").grid(
+                row=0, column=1, padx=(0, 12))
+
+        # Spacer pushes the action button to the bottom of the panel
+        p.grid_rowconfigure(10, weight=1)
+
+        # ── Primary action button ──────────────────────────────────────────────
+        self._run_btn = ctk.CTkButton(
+            p, text="▶   Transcribe", height=46, corner_radius=12,
+            fg_color="#4a9eff", hover_color="#6ab0ff", text_color="#ffffff",
+            font=F(15, "bold"), command=self._on_run)
+        self._run_btn.grid(row=11, column=0, sticky="ew", pady=(16, 2))
 
         return p
 
-    # ── Model panel ───────────────────────────────────────────────────────────
+    def _toggle_fmt(self, key):
+        self.v_fmts[key].set(not self.v_fmts[key].get())
+        self._update_fmt_chip(key)
 
-    def _panel_model(self, parent):
+    def _update_fmt_chip(self, key):
+        btn = self._fmt_chips.get(key)
+        if btn is None:
+            return
+        active = self.v_fmts[key].get()
+        btn.configure(
+            fg_color="#4a9eff" if active else _FMT,
+            border_color=("#4a9eff", "#4d8ef7") if active else _BORDER,
+            border_width=0 if active else 1,
+            hover_color="#6ab0ff" if active else _NAVHOV,
+            text_color="#ffffff" if active else _FMT_N,
+        )
+
+    # ── Settings panel — advanced / rarely-touched config ─────────────────────
+
+    def _panel_settings(self, parent):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        section_title(p, "Quality",
-                      "Adjust accuracy and speed to match your needs.", 0)
+        def glabel(text, row, top=14):
+            ctk.CTkLabel(p, text=text, font=F(10, "bold"),
+                         text_color=_SECHI).grid(
+                row=row, column=0, sticky="w", pady=(top, 6))
 
-        c1 = card(p, "Model")
-        c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        c1.grid_columnconfigure(0, weight=1)
+        # ── Header ─────────────────────────────────────────────────────────────
+        ctk.CTkLabel(p, text="Settings", font=F(20, "bold"),
+                     text_color=_PRI).grid(row=0, column=0, sticky="w",
+                                            pady=(0, 2))
+        ctk.CTkLabel(p, text="Defaults work for most files.", font=F(11),
+                     text_color=_HINT).grid(row=1, column=0, sticky="w",
+                                             pady=(0, 6))
 
-        self.v_model   = ctk.StringVar(value="large-v2")
-        self.v_device  = ctk.StringVar(value="auto")
-        self.v_compute = ctk.StringVar(value="int8" if IS_MAC else "float16")
-
-        for i, (lbl, var, vals) in enumerate([
-            ("Model", self.v_model,
-             ["tiny", "tiny.en", "base", "base.en", "small", "small.en",
-              "medium", "medium.en", "large-v1", "large-v2", "large-v3"]),
-            ("Precision", self.v_compute,
-             ["int8", "float16", "float32", "int8_float16"]),
-        ]):
-            r = 1 + i * 3
-            ctk.CTkLabel(c1, text=lbl, font=F(12),
-                         text_color=_LABEL).grid(row=r, column=0, sticky="w",
-                                                  padx=16,
-                                                  pady=(12 if i == 0 else 6, 2))
-            combo(c1, var, vals).grid(row=r + 1, column=0, sticky="ew",
-                                      padx=16, pady=(0, 4))
-
-        # Device combo starts with safe defaults; _probe_devices() fills real list.
-        ctk.CTkLabel(c1, text="Device", font=F(12),
-                     text_color=_LABEL).grid(row=7, column=0, sticky="w",
-                                              padx=16, pady=(6, 2))
-        self._device_combo = combo(c1, self.v_device, ["auto", "cpu"])
-        self._device_combo.grid(row=8, column=0, sticky="ew",
-                                padx=16, pady=(0, 4))
-
-        ctk.CTkFrame(c1, height=12, fg_color="transparent").grid(
-            row=99, column=0)
-
-        c2 = card(p, "Expert Tuning")
-        c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        c2.grid_columnconfigure(0, weight=1)
-        c2.grid_columnconfigure(1, weight=1)
-        c2.grid_columnconfigure(2, weight=1)
-
-        self.v_batch = ctk.StringVar(value="8" if IS_MAC else "16")
-        self.v_beam  = ctk.StringVar(value="5")
-        self.v_chunk = ctk.StringVar(value="30")
-
-        for col, (lbl, var, hint) in enumerate([
-            ("Speed",        self.v_batch, "Higher = faster, needs more VRAM"),
-            ("Accuracy",     self.v_beam,  "Higher = more accurate, slower"),
-            ("Segment (s)",  self.v_chunk, "Audio chunk size in seconds"),
-        ]):
-            ctk.CTkLabel(c2, text=lbl, font=F(11),
-                         text_color=_LABEL).grid(
-                row=1, column=col, sticky="w", padx=14, pady=(14, 2))
-            entry(c2, var, width=90).grid(
-                row=2, column=col, sticky="ew", padx=14, pady=(0, 4))
-            ctk.CTkLabel(c2, text=hint, font=F(10),
-                         text_color=_HINT).grid(
-                row=3, column=col, sticky="w", padx=14, pady=(0, 14))
+        # ── Performance ────────────────────────────────────────────────────────
+        glabel("PERFORMANCE", 2, top=8)
+        perf = ctk.CTkFrame(p, fg_color="transparent")
+        perf.grid(row=3, column=0, sticky="ew")
+        perf.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        # Precision (wide) + Speed / Accuracy / Segment
+        ctk.CTkLabel(perf, text="Precision", font=F(10),
+                     text_color=_LABEL).grid(row=0, column=0, sticky="w",
+                                              padx=(0, 5), pady=(0, 3))
+        for col, lbl in enumerate(["Speed", "Accuracy", "Segment"], start=1):
+            ctk.CTkLabel(perf, text=lbl, font=F(10), text_color=_LABEL).grid(
+                row=0, column=col, sticky="w", padx=5, pady=(0, 3))
+        combo(perf, self.v_compute,
+              ["int8", "float16", "float32", "int8_float16"]).grid(
+            row=1, column=0, sticky="ew", padx=(0, 5))
+        for col, var in enumerate([self.v_batch, self.v_beam, self.v_chunk],
+                                  start=1):
+            entry(perf, var).grid(row=1, column=col, sticky="ew", padx=5)
 
         if IS_MAC:
-            note = ctk.CTkFrame(p, fg_color=_MAC_BG, corner_radius=10)
-            note.grid(row=4, column=0, sticky="ew", pady=(0, 10))
-            note.grid_columnconfigure(0, weight=1)
+            note = ctk.CTkFrame(p, fg_color=_MAC_BG, corner_radius=8)
+            note.grid(row=4, column=0, sticky="ew", pady=(8, 0))
             ctk.CTkLabel(note,
-                         text="  Mac: Transcription on CPU  |  Alignment on MPS (Apple Silicon)",
+                         text="  Mac: Transcription on CPU · Alignment on MPS",
                          font=F(11), text_color=_MAC_TXT).grid(
-                padx=14, pady=12, sticky="w")
+                padx=12, pady=9, sticky="w")
 
-        return p
-
-    # ── Output panel ──────────────────────────────────────────────────────────
-
-    def _panel_output(self, parent):
-        p = ctk.CTkFrame(parent, fg_color="transparent")
-        p.grid_columnconfigure(0, weight=1)
-
-        section_title(p, "Save",
-                      "Choose where to save your files and which formats to export.", 0)
-
-        c1 = card(p, "Save Location")
-        c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        c1.grid_columnconfigure(0, weight=1)
-        self.v_out_dir = ctk.StringVar()
-        browse_row(c1, "Save to Folder", self.v_out_dir,
-                   self._browse_out_dir, 0)
-
-        c2 = card(p, "Export Formats")
-        c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        c2.grid_columnconfigure(0, weight=1)
-        c2.grid_columnconfigure(1, weight=1)
-
-        self.v_fmts = {}
-        fmts = [
-            ("word_json", "Word-level JSON", "Per-word timestamps & scores", True),
-            ("srt",       "SRT",             "Standard subtitles",           False),
-            ("vtt",       "VTT",             "WebVTT subtitles",             False),
-            ("txt",       "TXT",             "Plain text transcript",        False),
-            ("tsv",       "TSV",             "Tab-separated data",           False),
-            ("json",      "JSON",            "Segment-level data",           False),
-        ]
-        for i, (key, name, desc, default) in enumerate(fmts):
-            v = ctk.BooleanVar(value=default)
-            self.v_fmts[key] = v
-            r, c = divmod(i, 2)
-            f = ctk.CTkFrame(c2, fg_color=_FMT, corner_radius=8)
-            f.grid(row=r + 1, column=c, sticky="ew",
-                   padx=(14 if c == 0 else 6, 6 if c == 0 else 14),
-                   pady=4)
-            f.grid_columnconfigure(1, weight=1)
-            ctk.CTkCheckBox(f, text="", variable=v, width=20,
-                            checkbox_width=18, checkbox_height=18,
-                            checkmark_color="#ffffff",
-                            fg_color="#4a9eff",
-                            hover_color="#3a7acc").grid(
-                row=0, column=0, padx=(12, 8), pady=12)
-            ctk.CTkLabel(f, text=name, font=F(12, "bold"),
-                         text_color=_FMT_N).grid(row=0, column=1, sticky="w")
-            ctk.CTkLabel(f, text=desc, font=F(10),
-                         text_color=_FMT_D).grid(row=0, column=2,
-                                                   sticky="e", padx=(0, 12))
-
-        ctk.CTkFrame(c2, height=8, fg_color="transparent").grid(
-            row=99, column=0, columnspan=2)
-
-        c3 = card(p, "Word Timestamps")
-        c3.grid(row=4, column=0, sticky="ew", pady=(0, 10))
-        c3.grid_columnconfigure(0, weight=1)
-        self.v_align = ctk.BooleanVar(value=True)
-        toggle_row(c3, "Word timestamps",
-                   "Adds per-word timing — required for Word-level JSON and karaoke highlighting",
-                   self.v_align, 1)
-
-        c4 = card(p, "Silence Removal")
-        c4.grid(row=5, column=0, sticky="ew", pady=(0, 10))
-        c4.grid_columnconfigure(0, weight=1)
-        self.v_vad = ctk.BooleanVar(value=True)
-        toggle_row(c4, "Remove silence",
-                   "Skips quiet sections before transcribing — faster and cleaner results",
-                   self.v_vad, 1)
-
-        return p
-
-    # ── Advanced panel ────────────────────────────────────────────────────────
-
-    def _panel_advanced(self, parent):
-        p = ctk.CTkFrame(parent, fg_color="transparent")
-        p.grid_columnconfigure(0, weight=1)
-
-        section_title(p, "Settings",
-                      "Fine-tune silence detection, subtitle formatting, and AI model storage.", 0)
-
-        c1 = card(p, "Silence Detection")
-        c1.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        c1.grid_columnconfigure(0, weight=1)
-
-        self.v_vad_onset  = ctk.StringVar(value="0.500")
-        self.v_vad_offset = ctk.StringVar(value="0.363")
-
-        ctk.CTkLabel(c1, text="Adjust how aggressively silence is detected.",
-                     font=F(10), text_color=_HINT).grid(
-            row=1, column=0, sticky="w", padx=16, pady=(10, 6))
-        vf = ctk.CTkFrame(c1, fg_color="transparent")
-        vf.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
+        # ── Silence detection ──────────────────────────────────────────────────
+        glabel("SILENCE DETECTION", 5)
+        vf = ctk.CTkFrame(p, fg_color="transparent")
+        vf.grid(row=6, column=0, sticky="w")
         for i, (lbl, var) in enumerate([("Sensitivity", self.v_vad_onset),
                                         ("Release",     self.v_vad_offset)]):
-            ctk.CTkLabel(vf, text=lbl, font=F(11),
-                         text_color=_LABEL).grid(row=0, column=i * 2,
-                                                  sticky="w",
-                                                  padx=(0 if i == 0 else 20, 8))
-            entry(vf, var, width=88).grid(row=0, column=i * 2 + 1, sticky="w")
+            ctk.CTkLabel(vf, text=lbl, font=F(11), text_color=_LABEL).grid(
+                row=0, column=i * 2, sticky="w", padx=(0 if i == 0 else 20, 8))
+            entry(vf, var, width=100).grid(row=0, column=i * 2 + 1, sticky="w")
 
-        c2 = card(p, "Subtitle Formatting")
-        c2.grid(row=3, column=0, sticky="ew", pady=(0, 10))
-        c2.grid_columnconfigure(0, weight=1)
-
-        self.v_highlight = ctk.BooleanVar(value=False)
-        self.v_max_width = ctk.StringVar(value="")
-        self.v_max_count = ctk.StringVar(value="")
-
-        toggle_row(c2, "Karaoke highlighting",
-                   "Word-by-word highlight effect for SRT and VTT subtitles",
-                   self.v_highlight, 1)
-
-        sf = ctk.CTkFrame(c2, fg_color="transparent")
-        sf.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 14))
+        # ── Subtitle formatting ────────────────────────────────────────────────
+        glabel("SUBTITLE FORMATTING", 7)
+        cell = ctk.CTkFrame(p, fg_color=_CARD, corner_radius=8)
+        cell.grid(row=8, column=0, sticky="ew")
+        cell.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(cell, text="Karaoke highlighting", font=F(12),
+                     text_color=_TOGG_L).grid(row=0, column=0, sticky="w",
+                                               padx=12, pady=11)
+        ctk.CTkSwitch(cell, text="", variable=self.v_highlight, width=42,
+                      button_color="#4a9eff",
+                      progress_color="#4a9eff").grid(row=0, column=1,
+                                                      padx=(0, 12))
+        sf = ctk.CTkFrame(p, fg_color="transparent")
+        sf.grid(row=9, column=0, sticky="w", pady=(8, 0))
         for i, (lbl, var, ph) in enumerate([
             ("Max line width", self.v_max_width, "default"),
             ("Max line count", self.v_max_count, "default"),
         ]):
-            ctk.CTkLabel(sf, text=lbl, font=F(11),
-                         text_color=_LABEL).grid(row=0, column=i * 2,
-                                                  sticky="w",
-                                                  padx=(0 if i == 0 else 20, 8))
-            entry(sf, var, width=88, placeholder=ph).grid(
+            ctk.CTkLabel(sf, text=lbl, font=F(11), text_color=_LABEL).grid(
+                row=0, column=i * 2, sticky="w", padx=(0 if i == 0 else 20, 8))
+            entry(sf, var, width=100, placeholder=ph).grid(
                 row=0, column=i * 2 + 1, sticky="w")
 
-        c3 = card(p, "AI Models")
-        c3.grid(row=4, column=0, sticky="ew", pady=(0, 10))
-        c3.grid_columnconfigure(0, weight=1)
-        self.v_model_dir = ctk.StringVar(value=_default_model_dir())
-        browse_row(c3, "AI Models Folder", self.v_model_dir,
-                   self._browse_model_dir, 0)
-        ctk.CTkLabel(c3, text="Where downloaded AI models are stored",
-                     font=F(10), text_color=_HINT).grid(
-            row=2, column=0, columnspan=2, sticky="w",
-            padx=16, pady=(0, 12))
+        # ── Model storage ──────────────────────────────────────────────────────
+        glabel("AI MODELS", 10)
+        mr = ctk.CTkFrame(p, fg_color="transparent")
+        mr.grid(row=11, column=0, sticky="ew")
+        mr.grid_columnconfigure(0, weight=1)
+        entry(mr, self.v_model_dir).grid(row=0, column=0, sticky="ew",
+                                         padx=(0, 6))
+        ctk.CTkButton(mr, text="...", width=42, height=36, corner_radius=8,
+                      fg_color=_MID, hover_color=_MIDHOV, font=F(14),
+                      command=self._browse_model_dir).grid(row=0, column=1)
 
         return p
 
@@ -766,19 +683,12 @@ class App(ctk.CTk):
         self._progress.set(0)
 
         self._stop_btn = ctk.CTkButton(
-            bar, text="Cancel", width=72, height=34, corner_radius=8,
+            bar, text="Cancel", width=80, height=34, corner_radius=8,
             fg_color="transparent", hover_color=_BAR,
             text_color=_BAR, text_color_disabled=_BAR,
             border_width=0, state="disabled",
             font=F(12), command=self._on_stop)
-        self._stop_btn.grid(row=0, column=3, padx=(0, 8))
-
-        self._run_btn = ctk.CTkButton(
-            bar, text="Transcribe", width=100, height=34, corner_radius=8,
-            fg_color="#4a9eff", hover_color="#6ab0ff",
-            text_color="#ffffff",
-            font=F(13, "bold"), command=self._on_run)
-        self._run_btn.grid(row=0, column=4, padx=(0, 18))
+        self._stop_btn.grid(row=0, column=3, padx=(0, 18))
 
     # ── Navigation ────────────────────────────────────────────────────────────
 
@@ -791,20 +701,22 @@ class App(ctk.CTk):
         self._nav_key = key
         for k, panel in self._panels.items():
             if k == key:
-                panel.grid(row=0, column=0, sticky="nsew", padx=28, pady=24)
+                panel.grid(row=0, column=0, sticky="nsew", padx=22, pady=(18, 14))
             else:
                 panel.grid_remove()
 
-    # ── Log toggle ────────────────────────────────────────────────────────────
+    # ── Activity log — auto-shown while working, dismissable when idle ─────────
 
-    def _toggle_log(self):
+    def _show_log(self):
+        if not self._log_visible:
+            self._log_wrap.grid(row=0, column=0, sticky="sew")
+            self._log_wrap.lift()
+            self._log_visible = True
+
+    def _hide_log(self):
         if self._log_visible:
             self._log_wrap.grid_remove()
-            self._log_btn.configure(text_color=_NAV_OF)
-        else:
-            self._log_wrap.grid(row=1, column=0, sticky="ew")
-            self._log_btn.configure(text_color=_PRI)
-        self._log_visible = not self._log_visible
+            self._log_visible = False
 
     def _toggle_theme(self):
         ctk.set_appearance_mode(
@@ -814,8 +726,7 @@ class App(ctk.CTk):
 
     def _log(self, msg):
         self._q.put(str(msg))
-        if not self._log_visible:
-            self.after(0, self._toggle_log)
+        self.after(0, self._show_log)
 
     def _clear_log(self):
         self.log_area.configure(state="normal")
@@ -847,6 +758,16 @@ class App(ctk.CTk):
             self.v_file.set(p)
             if not self.v_out_dir.get():
                 self.v_out_dir.set(os.path.dirname(p))
+            # Update display labels
+            name = os.path.basename(p)
+            ext  = os.path.splitext(name)[1].upper().lstrip(".")
+            try:
+                mb = os.path.getsize(p) / (1024 * 1024)
+                meta = f"{ext}  ·  {mb:.0f} MB"
+            except Exception:
+                meta = ext
+            self._file_name_lbl.configure(text=name, text_color=_PRI)
+            self._file_meta_lbl.configure(text=meta, text_color=_HINT)
 
     def _browse_model_dir(self):
         p = filedialog.askdirectory(title="AI Models Folder")
@@ -906,148 +827,130 @@ class App(ctk.CTk):
         }
 
         self._stop.clear()
-        self._run_btn.configure(state="disabled", fg_color="#2a5a8a")
+        self._run_btn.configure(state="disabled", text="Transcribing…",
+                                fg_color="#2a5a8a")
         self._stop_btn.configure(state="normal", text_color=("#cc3333", "#ff453a"),
                                   hover_color=_NAVHOV)
         self._progress.configure(mode="indeterminate")
         self._progress.start()
         self._status_var.set("Running...")
         self._dot.configure(text_color="#ff9f0a")
-        threading.Thread(target=self._worker, args=(cfg,), daemon=True).start()
+        self._show_log()
+        self._start_proc(cfg)
 
     def _on_close(self):
         self._stop.set()
+        self._kill_proc()
         try:
             self.destroy()
         finally:
             os._exit(0)
 
     def _on_stop(self):
+        # Hard-cancel: kill the worker process immediately.
         self._stop.set()
-        self._log("Stopping after current operation...")
+        self._log("Stopping…")
         self._status_var.set("Stopping...")
         self._stop_btn.configure(state="disabled", text_color=_BAR,
                                   hover_color=_BAR)
+        self._kill_proc()
 
-    def _worker(self, cfg):
+    def _kill_proc(self):
+        p = self._proc
+        if p is not None and p.poll() is None:
+            try:
+                p.kill()
+            except Exception:
+                pass
+
+    # ── Subprocess worker — runs core/runner.py so Cancel can kill it ─────────
+
+    def _start_proc(self, cfg):
+        runner = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "core", "runner.py")
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONUNBUFFERED"] = "1"
+        kwargs = dict(
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, env=env,
+            text=True, encoding="utf-8", errors="replace", bufsize=1)
+        if IS_WIN:
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
         try:
-            from core import pipeline
-            if not cfg["model_dir"]:
-                cfg["model_dir"] = _default_model_dir()
-            os.environ["HF_HOME"] = cfg["model_dir"]
+            self._proc = subprocess.Popen([sys.executable, runner], **kwargs)
+        except Exception as e:
+            self._log(f"ERROR: could not start worker: {e}")
+            self._status_var.set("Error")
+            self._dot.configure(text_color="#ff3b30")
+            self._reset_btns()
+            return
+        try:
+            self._proc.stdin.write(json.dumps(cfg) + "\n")
+            self._proc.stdin.flush()
+            self._proc.stdin.close()
+        except Exception:
+            pass
+        threading.Thread(target=self._read_proc, args=(self._proc,),
+                         daemon=True).start()
 
-            # ── Device ───────────────────────────────────────────────────────
-            _, t_dev, a_dev = pipeline.detect_device(cfg["device"])
-            compute, adjusted = pipeline.resolve_compute(t_dev, cfg["compute"])
-            if adjusted:
-                self._log("  float16 not supported on CPU — using int8")
-            self._log(f"Device: {t_dev.upper()}   Compute: {compute}")
-            if a_dev != t_dev:
-                self._log(f"Alignment: {a_dev.upper()}")
-            if self._stop.is_set():
-                return
-
-            lang = None if cfg["language"] == "auto" else cfg["language"]
-
-            # ── Model ─────────────────────────────────────────────────────────
-            model_cache = os.path.join(
-                cfg["model_dir"], "hub",
-                f"models--Systran--faster-whisper-{cfg['model']}")
-            if not os.path.isdir(model_cache):
-                self._log(f"Downloading model '{cfg['model']}' for the first time...")
-                self._log("  The model will be saved and reused on all future runs.")
-                self.after(0, lambda: self._status_var.set("Downloading model..."))
-                self.after(0, self._progress_indeterminate)
-                self._dl_last = 0
-                self._dl_finalizing = False
-                self._dl_determinate = False
-                try:
-                    pipeline.download_model(
-                        cfg["model"], cfg["model_dir"],
-                        progress_cb=self._model_dl_progress,
-                        cancel_cb=lambda: self._stop.is_set())
-                    self._log("  Model downloaded.")
-                except Exception as e:
-                    if self._stop.is_set():
-                        return
-                    self._log(f"  Could not track progress ({e}) — downloading...")
-                self.after(0, self._progress_indeterminate)
-                self.after(0, lambda: self._status_var.set("Loading model..."))
-            else:
-                self._log(f"Loading model '{cfg['model']}' from cache...")
-                self.after(0, lambda: self._status_var.set("Loading model..."))
-
-            model = pipeline.load_model(
-                cfg["model"], t_dev, compute, lang, cfg["beam"])
-            if self._stop.is_set():
-                return
-
-            # ── Audio ─────────────────────────────────────────────────────────
-            self._log("Loading audio...")
-            self.after(0, lambda: self._status_var.set("Loading audio..."))
-            audio = pipeline.load_audio(cfg["audio"])
-            if self._stop.is_set():
-                return
-
-            # ── Transcribe ────────────────────────────────────────────────────
-            self._log("Transcribing...")
-            self.after(0, lambda: self._status_var.set("Transcribing..."))
-            result, det = pipeline.transcribe(model, audio, cfg["batch"], lang)
-            self._log(f"  Language: {det}   Segments: {len(result['segments'])}")
-            if self._stop.is_set():
-                return
-
-            # ── Align ─────────────────────────────────────────────────────────
-            needs_align = cfg["align"] and (
-                "word_json" in cfg["formats"] or cfg["highlight"])
-            if needs_align:
-                self._log("Aligning word timestamps...")
-                self.after(0, lambda: self._status_var.set("Aligning..."))
-                try:
-                    result = pipeline.align(result, det, a_dev, audio)
-                except Exception as e:
-                    self._log(f"  Alignment failed: {e} — continuing without word timestamps")
-                    result.setdefault("language", det)
-            else:
-                result.setdefault("language", det)
-            if self._stop.is_set():
-                return
-
-            # ── Export ────────────────────────────────────────────────────────
-            self._log("Saving files...")
-            self.after(0, lambda: self._status_var.set("Saving..."))
-            last_path = None
-            for fmt, path, err in pipeline.export(
-                    result, cfg["formats"], cfg["out_dir"], cfg["audio"],
-                    {"max_width": cfg["max_width"],
-                     "max_count": cfg["max_count"],
-                     "highlight": cfg["highlight"]}):
-                if err:
-                    self._log(f"  {fmt} error: {err}")
+    def _read_proc(self, proc):
+        last_path, err = None, None
+        for line in proc.stdout:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except Exception:
+                self._log(line)            # stray non-JSON output (e.g. traceback)
+                continue
+            t = ev.get("t")
+            if t == "log":
+                self._log(ev.get("m", ""))
+            elif t == "status":
+                self.after(0, lambda m=ev.get("m", ""): self._status_var.set(m))
+            elif t == "pmode":
+                if ev.get("mode") == "determinate":
+                    self.after(0, self._progress_determinate)
                 else:
-                    self._log(f"  {fmt:<10}->  {path}")
-                    last_path = path
+                    self.after(0, self._progress_indeterminate)
+            elif t == "progress":
+                self.after(0, lambda v=ev.get("v", 0): self._progress.set(
+                    min(1.0, max(0.0, v))))
+            elif t == "done":
+                last_path = ev.get("path")
+            elif t == "error":
+                err = ev.get("m", "Unknown error")
+        rc = proc.wait()
+        self.after(0, lambda: self._finish_proc(rc, last_path, err))
 
-            self._log("Done!")
-            self.after(0, lambda: self._status_var.set("Done"))
-            self.after(0, lambda: self._dot.configure(text_color="#34c759"))
+    def _finish_proc(self, rc, last_path, err):
+        if self._stop.is_set():
+            self._status_var.set("Stopped")
+            self._dot.configure(text_color="#888888")
+        elif err is not None or rc != 0:
+            if err:
+                self._log(f"ERROR: {err}")
+            self._status_var.set("Error")
+            self._dot.configure(text_color="#ff3b30")
+        else:
+            self._status_var.set("Done")
+            self._dot.configure(text_color="#34c759")
             if last_path:
                 folder = os.path.dirname(os.path.abspath(last_path))
-                self.after(0, lambda f=folder: subprocess.Popen(
-                    ["explorer", f], creationflags=subprocess.CREATE_NO_WINDOW))
-
-        except Exception as e:
-            self._log(f"ERROR: {e}\n{traceback.format_exc()}")
-            self.after(0, lambda: self._status_var.set("Error"))
-            self.after(0, lambda: self._dot.configure(text_color="#ff3b30"))
-        finally:
-            if self._stop.is_set():
-                self.after(0, lambda: self._status_var.set("Stopped"))
-                self.after(0, lambda: self._dot.configure(text_color="#888888"))
-            self.after(0, self._reset_btns)
+                try:
+                    subprocess.Popen(["explorer", folder],
+                                     creationflags=subprocess.CREATE_NO_WINDOW)
+                except Exception:
+                    pass
+            self.after(4000, self._hide_log)
+        self._proc = None
+        self._reset_btns()
 
     def _reset_btns(self):
-        self._run_btn.configure(state="normal", fg_color="#4a9eff")
+        self._run_btn.configure(state="normal", text="▶   Transcribe",
+                                fg_color="#4a9eff")
         self._stop_btn.configure(state="disabled", text_color=_BAR,
                                   hover_color=_BAR)
         self._progress.stop()
@@ -1066,33 +969,6 @@ class App(ctk.CTk):
         self._progress.configure(mode="indeterminate")
         self._progress.set(0)
         self._progress.start()
-
-    def _model_dl_progress(self, done, total):
-        """Display-only progress, called ~3x/sec from the download poller."""
-        frac = (done / total) if total else 0
-        # Once every byte is in, HuggingFace finalizes the files on disk (a
-        # large copy on Windows) with no further size growth. Switch to an
-        # indeterminate bar so it doesn't look frozen at 100%.
-        if frac >= 1.0 and total > 20 * 1048576:
-            if not getattr(self, "_dl_finalizing", False):
-                self._dl_finalizing = True
-                self.after(0, self._progress_indeterminate)
-                self.after(0, lambda: self._status_var.set(
-                    "Finalizing model files..."))
-            return
-        now = time.time()
-        if now - getattr(self, "_dl_last", 0) < 0.2:
-            return
-        self._dl_last = now
-        # Switch from the initial indeterminate spinner to a real bar once the
-        # first measurement arrives.
-        if not getattr(self, "_dl_determinate", False):
-            self._dl_determinate = True
-            self.after(0, self._progress_determinate)
-        mb_d, mb_t = done / 1048576, total / 1048576
-        txt = f"Downloading model... {mb_d:.0f} / {mb_t:.0f} MB  ({frac*100:.0f}%)"
-        self.after(0, lambda: self._status_var.set(txt))
-        self.after(0, lambda f=frac: self._progress.set(min(1.0, f)))
 
 
 if __name__ == "__main__":
