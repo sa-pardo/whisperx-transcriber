@@ -58,12 +58,17 @@ copy /Y "%ROOT%\app.py"           "%DIST%\app.py"           >nul
 copy /Y "%ROOT%\setup_wizard.py"  "%DIST%\setup_wizard.py"  >nul
 copy /Y "%ROOT%\transcribe.py"    "%DIST%\transcribe.py"    >nul
 copy /Y "%ROOT%\version.txt"      "%DIST%\version.txt"      >nul
+copy /Y "%ROOT%\requirements-core.txt" "%DIST%\requirements-core.txt" >nul
+copy /Y "%ROOT%\requirements-cpu.txt" "%DIST%\requirements-cpu.txt" >nul
+copy /Y "%ROOT%\requirements-gpu.txt" "%DIST%\requirements-gpu.txt" >nul
 
 rem Copy the pipeline + runner modules
 if not exist "%DIST%\core" mkdir "%DIST%\core"
 copy /Y "%ROOT%\core\__init__.py"  "%DIST%\core\__init__.py"  >nul
 copy /Y "%ROOT%\core\pipeline.py"  "%DIST%\core\pipeline.py"  >nul
 copy /Y "%ROOT%\core\runner.py"    "%DIST%\core\runner.py"    >nul
+copy /Y "%ROOT%\core\settings.py"  "%DIST%\core\settings.py"  >nul
+copy /Y "%ROOT%\core\runtime.py"   "%DIST%\core\runtime.py"   >nul
 
 rem Create empty runtime/ and Models/ placeholder folders
 if not exist "%DIST%\runtime"  mkdir "%DIST%\runtime"
@@ -81,7 +86,7 @@ echo   [4/4] Creating portable zip...
 if not exist "%ROOT%\dist\release" mkdir "%ROOT%\dist\release"
 set "ZIP=%ROOT%\dist\release\WhisperXTranscriber.zip"
 if exist "%ZIP%" del /f "%ZIP%"
-"%PY%" -c "import zipfile,pathlib; src=pathlib.Path(r'%DIST%'); out=pathlib.Path(r'%ZIP%'); zf=zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=6); [zf.write(f,f.relative_to(src)) for f in src.rglob('*') if f.is_file()]; zf.close(); print(f'  Packed {sum(1 for _ in src.rglob(chr(42)) if _.is_file())} files -> {out.stat().st_size//1048576} MB')"
+"%PY%" "%ROOT%\packaging\release.py" "%DIST%" "%ZIP%"
 if errorlevel 1 (
     echo   ERROR: Zip creation failed.
     exit /b 1

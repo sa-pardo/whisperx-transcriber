@@ -6,7 +6,7 @@
 #  Later runs : opens the app in ~2 seconds
 #
 #  Requirements: Python 3.10+   brew install python  |  sudo apt install python3
-#               ffmpeg           brew install ffmpeg  |  sudo apt install ffmpeg
+#               Portable FFmpeg is installed with the core dependencies.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -56,12 +56,31 @@ if [ -z "$PYTHON" ]; then
 fi
 echo "  Found $($PYTHON --version)"
 
+# ── Select requirements using the shared driver compatibility check ──────────
+UNAME="$(uname -s)"
+ARCH="$(uname -m)"
+RUNTIME_PYTHON="$PYTHON"
+if [ -f "$VENV/bin/python" ]; then
+    RUNTIME_PYTHON="$VENV/bin/python"
+fi
+TORCH_REQUIREMENTS="$DIR/requirements-cpu.txt"
+CUDA_INDEX=""
+CUDA_CHECK=()
+if [ "$UNAME" = "Linux" ]; then
+    CUDA_INDEX="$("$RUNTIME_PYTHON" "$DIR/core/runtime.py" --cuda-index)"
+    if [ -n "$CUDA_INDEX" ]; then
+        TORCH_REQUIREMENTS="$DIR/requirements-gpu.txt"
+        CUDA_CHECK=(--cuda)
+    fi
+fi
+
 # ── Skip setup if venv already ready ─────────────────────────────────────────
 if [ -f "$VENV/bin/python" ]; then
-    echo "  Environment ready."
-    echo ""
-    "$VENV/bin/python" "$APP"
-    exit $?
+    if "$VENV/bin/python" "$DIR/core/runtime.py" "${CUDA_CHECK[@]}"; then
+        echo "  Environment ready."
+        "$VENV/bin/python" "$APP"
+        exit $?
+    fi
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -73,7 +92,9 @@ echo ""
 
 # ── Create virtual environment ────────────────────────────────────────────────
 echo "  [1/4] Creating virtual environment..."
-"$PYTHON" -m venv "$VENV"
+if [ ! -f "$VENV/bin/python" ]; then
+    "$PYTHON" -m venv "$VENV"
+fi
 echo "         Done."
 
 # ── Upgrade pip ───────────────────────────────────────────────────────────────
@@ -81,44 +102,33 @@ echo "  [2/4] Upgrading pip..."
 "$VENV/bin/pip" install --upgrade pip --quiet
 echo "         Done."
 
-# ── Detect hardware and install PyTorch ───────────────────────────────────────
+# ── Install PyTorch from the selected requirements ──────────────────────────
 echo "  [3/4] Installing PyTorch..."
-UNAME="$(uname -s)"
-ARCH="$(uname -m)"
-TORCH_FLAGS=""
 
 if [ "$UNAME" = "Darwin" ] && [ "$ARCH" = "arm64" ]; then
     echo "         Apple Silicon (M-series) — MPS acceleration available"
     # Standard PyTorch build has MPS support on Apple Silicon
-elif [ "$UNAME" = "Linux" ] && command -v nvidia-smi &>/dev/null; then
-    echo "         NVIDIA GPU detected — installing CUDA 12.1 build"
+elif [ -n "$CUDA_INDEX" ]; then
+    echo "         NVIDIA GPU detected — installing CUDA 12.8 build"
     echo "         (This download is ~2.5 GB, please be patient)"
-    TORCH_FLAGS="--index-url https://download.pytorch.org/whl/cu121"
+elif [ "$UNAME" = "Linux" ] && command -v nvidia-smi &>/dev/null; then
+    echo "         CUDA 12.8 not detected — installing CPU build; check the NVIDIA driver"
 else
-    echo "         CPU-only build (no NVIDIA GPU detected)"
+    echo "         Installing CPU build"
 fi
 
-# shellcheck disable=SC2086
-"$VENV/bin/pip" install torch torchaudio $TORCH_FLAGS --quiet
+"$VENV/bin/pip" install --force-reinstall --no-deps -r "$TORCH_REQUIREMENTS" --quiet
 echo "         Done."
 
 # ── Install remaining packages ────────────────────────────────────────────────
 echo "  [4/4] Installing WhisperX + UI dependencies..."
 echo "         (Another ~500 MB — almost there)"
-"$VENV/bin/pip" install whisperx customtkinter reportlab --quiet
+"$VENV/bin/pip" install -r "$DIR/requirements-core.txt" --quiet
 echo "         Done."
 
-# ── ffmpeg check ─────────────────────────────────────────────────────────────
+# ── Verify the installed dependencies and selected PyTorch build ─────────────
 echo ""
-if ! command -v ffmpeg &>/dev/null; then
-    echo "  NOTE: ffmpeg not found. WhisperX needs it to read video files."
-    echo "        Audio files (.wav/.mp3) will work without it."
-    if [ "$UNAME" = "Darwin" ]; then
-        echo "        Install: brew install ffmpeg"
-    else
-        echo "        Install: sudo apt install ffmpeg"
-    fi
-fi
+"$VENV/bin/python" "$DIR/core/runtime.py" "${CUDA_CHECK[@]}"
 
 echo ""
 echo "  Setup complete!  The app will open now and on every future run."

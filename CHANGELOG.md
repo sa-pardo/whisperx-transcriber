@@ -4,7 +4,19 @@ All notable changes to WhisperX Transcriber are documented here.
 
 ## [Unreleased]
 
+### Added
+- Optional speaker diarization in the GUI and CLI, with minimum/maximum speaker
+  bounds and word/segment speaker labels through WhisperX Community-1.
+- HF token remembered in project-local `settings.json`, masked entry, automatic
+  saving, deletion, environment fallback, and redacted diagnostics.
+- CLI batch size, precision, output folder, `all` output formats and flag aliases.
+
 ### Changed
+- Pin compatible inference packages, install portable FFmpeg, and repair CPU-only
+  PyTorch environments on NVIDIA hardware using CUDA 12.8 wheels.
+- Align diarized jobs when word timestamps are enabled, release GPU memory between
+  stages, and stop before exporting when requested diarization fails.
+- Version portable runtime setup and exclude credential files from release ZIPs.
 - Windows `run.bat` reuses local `.venv` Python and local or PATH-installed uv,
   downloading uv and Python inside the project when missing. Package installation
   uses uv and resumes when an existing virtual environment lacks dependencies.

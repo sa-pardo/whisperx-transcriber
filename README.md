@@ -254,7 +254,10 @@ whisperx-transcriber/
 ├── setup_wizard.py         First-run wizard
 ├── transcribe.py           Headless CLI for scripting and batch use
 ├── core/
-│   └── pipeline.py         All AI/WhisperX logic — zero GUI dependencies
+│   ├── pipeline.py         All AI/WhisperX logic — zero GUI dependencies
+│   ├── runner.py           Subprocess worker and progress events
+│   ├── settings.py         Project-local HF token persistence
+│   └── runtime.py          Shared dependency and CUDA checks
 ├── run.bat                 Windows developer launcher
 ├── run.sh                  macOS / Linux developer launcher
 ├── requirements-cpu.txt    PyTorch CPU wheels
@@ -263,7 +266,8 @@ whisperx-transcriber/
 ├── requirements-build.txt  Build tools (pyinstaller)
 ├── packaging/
 │   ├── build.bat           Builds portable zip
-│   └── launcher.spec       PyInstaller spec
+│   ├── launcher.spec       PyInstaller spec
+│   └── release.py          ZIP creation excluding credentials
 └── assets/
     ├── icon.ico            App icon
     └── screenshots/        README screenshots
@@ -277,6 +281,47 @@ python transcribe.py audio.mp3 --language ar --model large-v2
 python transcribe.py audio.mp3 --device cpu --output srt
 python transcribe.py audio.mp3 --model-dir D:\models
 ```
+
+### Speaker diarization
+
+In **Settings**, enter a Hugging Face read token. The app saves it automatically
+in `settings.json` beside `app.py`, inside this project folder. The token is stored
+as plain text and masked in the GUI. **Forget token** removes the saved file.
+GUI and CLI share this file, independently of the current working directory;
+moving the project with its settings file preserves the token.
+
+Accept the conditions for
+[pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)
+with the same Hugging Face account. A token alone does not grant model access.
+Create a read token at [Hugging Face tokens](https://huggingface.co/settings/tokens).
+The first diarized transcription downloads the model to the existing Models cache.
+
+In **Transcribe**, enable **Speaker diarization**. Leave the speaker bounds empty
+for automatic detection, or set both to `4` when four speakers are known.
+**Word timestamps** adds speaker labels to aligned words; without alignment,
+speakers are assigned to segments. Select SRT, VTT, TXT, TSV and JSON for the
+equivalent of WhisperX's `--output_format all`. Word JSON is an additional format.
+TXT/SRT/VTT include speaker labels; JSON and Word JSON retain `speaker` fields.
+TSV keeps WhisperX's native `start`, `end`, `text` columns.
+
+```powershell
+.\.venv\Scripts\python.exe .\transcribe.py "C:\Audios\reunion.mp3" `
+    --model large-v3 --language es --device cuda --compute_type float16 `
+    --batch_size 8 --diarize --min_speakers 4 --max_speakers 4 `
+    --output_dir "C:\Audios\resultado" --output_format all
+```
+
+The CLI accepts `--hf_token` to save or replace the remembered token. Resolution
+order is explicit input, project `settings.json`, then `HF_TOKEN`; an environment
+token is not saved automatically. Hyphenated aliases such as `--min-speakers`
+are also accepted. Settings errors are reported without changing storage location.
+
+Windows setup reuses the project's local Python and uv, installs compatible
+PyTorch 2.8 CUDA 12.8 wheels on NVIDIA machines, and repairs older CPU-only
+environments. A CUDA-compatible NVIDIA driver is required. Portable FFmpeg is
+installed automatically; diarization reuses decoded audio in memory.
+The portable launcher's versioned setup marker updates older runtimes once.
+`settings.json` and its temporary files are excluded from Git and release ZIPs.
 
 ### Tech stack
 

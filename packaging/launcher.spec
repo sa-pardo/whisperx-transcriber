@@ -46,7 +46,7 @@ excludes = [
     # Scientific computing — not needed in setup wizard
     "numpy", "scipy", "pandas",
     "sklearn", "skimage",
-    # PyAnnote / diarization — optional, not in base install
+    # PyAnnote / diarization — installed into runtime, never bundled here
     "pyannote", "pyannote.audio", "pyannote.core", "pyannote.pipeline",
     "speechbrain",
     # Training frameworks

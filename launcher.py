@@ -11,6 +11,7 @@ whisperx, ctranslate2, or any ML package — they download on first run.
 import os
 import sys
 import subprocess
+from core.runtime import SETUP_VERSION, cuda_torch_index
 
 
 def _base_dir() -> str:
@@ -34,6 +35,21 @@ def _runtime_ready() -> bool:
         return False
     flag = os.path.join(_base_dir(), "runtime", ".setup_complete")
     if not os.path.isfile(flag):
+        return False
+    try:
+        with open(flag, encoding="utf-8") as fh:
+            if fh.read().strip() != SETUP_VERSION:
+                return False
+        probe = os.path.join(_base_dir(), "core", "runtime.py")
+        cmd = [py, probe]
+        if cuda_torch_index():
+            cmd.append("--cuda")
+        kwargs = dict(capture_output=True, timeout=30)
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+        if subprocess.run(cmd, **kwargs).returncode != 0:
+            return False
+    except (OSError, subprocess.TimeoutExpired):
         return False
     # Ensure ffmpeg is available — bundled via imageio-ffmpeg or on system PATH
     ffmpeg_binaries = os.path.join(_base_dir(), "runtime", "Lib", "site-packages",

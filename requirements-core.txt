@@ -6,6 +6,9 @@
 #   1. pip install -r requirements-cpu.txt   (or requirements-gpu.txt)
 #   2. pip install -r requirements-core.txt
 
-whisperx
+whisperx==3.8.6
+pyannote.audio==4.0.7
+torchcodec==0.7.0
+imageio-ffmpeg>=0.6.0
 customtkinter>=5.2.2
 Pillow>=9.0.0

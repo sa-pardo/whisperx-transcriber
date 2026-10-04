@@ -56,10 +56,17 @@ What it does:
 1. Checks `.venv` exists (exits with error if not)
 2. Installs `pyinstaller` and `Pillow` into `.venv` if missing
 3. Runs PyInstaller with `packaging/launcher.spec` — produces a thin launcher with **no torch, no whisperx, no ML packages**
-4. Copies `app.py`, `setup_wizard.py`, `transcribe.py`, and `version.txt` into `dist/WhisperXTranscriber/`
+4. Copies `app.py`, `setup_wizard.py`, `transcribe.py`, `version.txt`, the `core/`
+   modules and CPU/GPU/core requirements into `dist/WhisperXTranscriber/`
 5. Copies `assets/icon.ico` into `dist/WhisperXTranscriber/assets/`
 6. Creates empty `runtime/` and `Models/` placeholder directories
 7. Zips `dist/WhisperXTranscriber/` → `dist/release/WhisperXTranscriber.zip`
+
+The ZIP builder explicitly excludes `settings.json` and `.settings-*.tmp`, even
+if a reused distribution folder contains a previously saved HF token. Tokens are
+created only after a user enters one, beside `app.py` in their extracted project.
+The versioned `runtime/.setup_complete` marker makes older runtimes run setup
+again to install the compatible diarization stack and portable FFmpeg.
 
 ---
 

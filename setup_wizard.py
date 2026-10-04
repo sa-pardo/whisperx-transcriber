@@ -15,6 +15,7 @@ import threading
 import urllib.request
 import webbrowser
 import customtkinter as ctk
+from core.runtime import SETUP_VERSION, cuda_torch_index, has_nvidia
 
 _PYTHON_VERSION   = "3.13.7"
 _PYTHON_URL       = f"https://www.python.org/ftp/python/{_PYTHON_VERSION}/python-{_PYTHON_VERSION}-amd64.exe"
@@ -41,40 +42,11 @@ _LTXT  = ("#333333", "#aaaaaa")
 # ── Detection helpers ─────────────────────────────────────────────────────────
 
 def _has_nvidia() -> bool:
-    try:
-        r = subprocess.run(["nvidia-smi"], capture_output=True, timeout=6)
-        return r.returncode == 0
-    except Exception:
-        return False
+    return has_nvidia()
 
 
 def _cuda_torch_index() -> str | None:
-    """
-    Return the PyTorch wheel index URL for the detected CUDA driver, or None
-    if no NVIDIA GPU is present.  Maps driver CUDA version → nearest PyTorch
-    CUDA suffix (driver is always forward-compatible with older toolkits).
-    """
-    try:
-        import re
-        r = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=6)
-        if r.returncode != 0:
-            return None
-        m = re.search(r"CUDA Version:\s*(\d+)\.(\d+)", r.stdout)
-        if not m:
-            return None
-        major, minor = int(m.group(1)), int(m.group(2))
-        version = major * 10 + minor  # e.g. 12.8 → 128, 12.1 → 121
-        if version >= 126:
-            suffix = "cu128"
-        elif version >= 121:
-            suffix = "cu124"
-        elif version >= 118:
-            suffix = "cu118"
-        else:
-            return None  # too old, fall back to CPU
-        return f"https://download.pytorch.org/whl/{suffix}"
-    except Exception:
-        return None
+    return cuda_torch_index()
 
 
 _COMPAT_MINORS = (10, 11, 12, 13)   # Python 3.x versions with full wheel support
@@ -615,87 +587,59 @@ class SetupWizard:
             # 2. Upgrade pip
             self._set_status("Upgrading pip...")
             self._log("\n[pip] Upgrading...")
-            self._run_pip([venv_py, "-m", "pip", "install",
-                           "--upgrade", "pip", "--quiet", "--timeout", "120"])
+            rc = self._run_pip([venv_py, "-m", "pip", "install",
+                                "--upgrade", "pip", "--quiet", "--timeout", "120"])
+            if rc != 0:
+                raise RuntimeError("Could not upgrade pip — see the log above.")
             self._set_progress(0.10)
 
-            # 3. Install all packages in one pip call.
-            #    GPU path: pytorch.org is the primary index so torch/torchaudio
-            #    resolve to the CUDA build; PyPI is the fallback for everything
-            #    else (whisperx, customtkinter, ...).  One torch download, no swap.
-            #    CPU path: plain PyPI install.
-            #
-            #    Minimum torch version — pip will pick the latest available
-            #    wheel for the current Python version.  Using >= instead of ==
-            #    so new Python versions (3.14+) aren't blocked by missing exact
-            #    wheels on the pytorch index.
-            TORCH_MIN = "2.8.0"
-
-            if self._pkg_installed(venv_pip, "whisperx"):
-                self._log("\n[whisperx] Already installed — skipping.")
-                self._set_progress(0.85)
-            else:
-                torch_index = _cuda_torch_index()
-                self._install_done = False
-                self.win.after(1000, lambda: self._animate_progress(0.10, 0.83))
-
-                if torch_index:
-                    self._set_status(
-                        "Downloading AI engine and dependencies (1–3 GB, CUDA)...")
-                    self._log(
-                        f"\n[Installing] torch>={TORCH_MIN}+CUDA, whisperx, ffmpeg, deps...")
-                    cmd = [
-                        venv_pip, "install", "--timeout", "120",
-                        f"torch>={TORCH_MIN}",
-                        f"torchaudio>={TORCH_MIN}",
-                        "whisperx",
-                        "imageio-ffmpeg",
-                        "customtkinter>=5.2.2",
-                        "Pillow",
-                        "--index-url", torch_index,
-                        "--extra-index-url", "https://pypi.org/simple/",
-                    ]
-                else:
-                    self._set_status(
-                        "Downloading AI engine and dependencies (1–3 GB)...")
-                    self._log("\n[Installing] whisperx + ffmpeg + customtkinter + Pillow...")
-                    cmd = [
-                        venv_pip, "install", "--timeout", "120",
-                        "whisperx",
-                        "imageio-ffmpeg",
-                        "customtkinter>=5.2.2",
-                        "Pillow",
-                    ]
-
-                rc = self._run_pip(cmd)
-                self._install_done = True
-                if hasattr(self, "_prog"):
-                    self.win.after(0, self._prog.stop)
-                    self.win.after(0, lambda: self._prog.configure(mode="determinate"))
+            # 3. Install torch from its own index, then the shared core requirements.
+            # Checking the build repairs old CPU environments on NVIDIA machines.
+            torch_index = _cuda_torch_index()
+            probe = [venv_py, os.path.join(self.base_dir, "core", "runtime.py")]
+            cuda_flag = ["--cuda"] if torch_index else []
+            check = subprocess.run(
+                probe + ["--torch-only"] + cuda_flag,
+                capture_output=True, timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            if check.returncode != 0:
+                kind = "gpu" if torch_index else "cpu"
+                self._set_status(f"Installing compatible PyTorch ({kind.upper()})...")
+                self._log(f"\n[torch] Installing {kind.upper()} wheels...")
+                rc = self._run_pip([
+                    venv_py, "-m", "pip", "install", "--timeout", "120",
+                    "--force-reinstall", "--no-deps", "-r",
+                    os.path.join(self.base_dir, f"requirements-{kind}.txt")])
                 if rc != 0:
-                    raise RuntimeError(
-                        "pip install failed — see the log above for details.")
-                self._set_progress(0.85)
-
-            # ffmpeg — checked independently so it installs even when whisperx
-            # was already cached (handles upgrades from older app versions)
-            if not self._pkg_installed(venv_pip, "imageio-ffmpeg"):
-                self._set_status("Installing ffmpeg (audio decoder)...")
-                self._log("\n[ffmpeg] Installing portable ffmpeg...")
-                rc = self._run_pip([venv_pip, "install", "imageio-ffmpeg",
-                                    "--quiet", "--timeout", "120"])
-                if rc != 0:
-                    raise RuntimeError(
-                        "ffmpeg install failed — see the log above for details.")
-                self._log("\n[ffmpeg] Done.")
+                    raise RuntimeError("PyTorch install failed — see the log above.")
             else:
-                self._log("\n[ffmpeg] Already installed — skipping.")
+                self._log("\n[torch] Compatible build already installed.")
+            if _has_nvidia() and not torch_index:
+                self._log("\n[CUDA] Update the NVIDIA driver for CUDA 12.8. Using CPU.")
+            self._set_progress(0.40)
+            self._set_status("Installing WhisperX, diarization and portable FFmpeg...")
+            self._install_done = False
+            self.win.after(1000, lambda: self._animate_progress(0.40, 0.90))
+            rc = self._run_pip([
+                venv_py, "-m", "pip", "install", "--timeout", "120", "-r",
+                os.path.join(self.base_dir, "requirements-core.txt")])
+            self._install_done = True
+            if hasattr(self, "_prog"):
+                self.win.after(0, self._prog.stop)
+                self.win.after(0, lambda: self._prog.configure(mode="determinate"))
+            if rc != 0:
+                raise RuntimeError("Core dependencies install failed — see the log above.")
+            check = subprocess.run(
+                probe + cuda_flag, capture_output=True, timeout=30,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            if check.returncode != 0:
+                raise RuntimeError("Dependency verification failed after installation.")
             self._set_progress(0.95)
 
             # 4. Mark complete
             flag = os.path.join(runtime, ".setup_complete")
-            with open(flag, "w") as fh:
-                fh.write("ok")
+            with open(flag, "w", encoding="utf-8") as fh:
+                fh.write(SETUP_VERSION)
 
             self._set_progress(1.0)
             self._set_status("Setup complete!")
@@ -706,7 +650,7 @@ class SetupWizard:
             import traceback as tb
             self._log(f"\nERROR: {exc}\n{tb.format_exc()}")
             self._set_status("Setup failed — see log above")
-            self.win.after(0, lambda: self._show_error(str(exc)))
+            self.win.after(0, lambda msg=str(exc): self._show_error(msg))
 
     # ── Page 3: Done / Error ──────────────────────────────────────────────────
 

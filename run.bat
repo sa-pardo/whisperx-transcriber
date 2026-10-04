@@ -17,6 +17,13 @@ set "UV_PYTHON_INSTALL_DIR=%WX_ROOT%.tools\python"
 set "UV_PYTHON_BIN_DIR=%WX_ROOT%.tools\python-bin"
 set "UV_CACHE_DIR=%WX_ROOT%.cache\uv"
 set "UV_NO_MODIFY_PATH=1"
+set "WX_REQUIREMENTS=%WX_ROOT%requirements-cpu.txt"
+set "WX_CUDA_FLAG="
+nvidia-smi >nul 2>&1
+if not errorlevel 1 (
+    set "WX_REQUIREMENTS=%WX_ROOT%requirements-gpu.txt"
+    set "WX_CUDA_FLAG=--cuda"
+)
 
 echo.
 echo   +------------------------------------------+
@@ -80,7 +87,7 @@ echo.
 
 rem -- Reuse existing Python, installing packages if setup was incomplete --------
 if not exist "%PY%" goto :create_venv
-"%PY%" -c "import importlib.util; names = ('torch', 'torchaudio', 'whisperx', 'customtkinter', 'PIL'); raise SystemExit(0 if all(importlib.util.find_spec(name) is not None for name in names) else 1)" >nul 2>&1
+"%PY%" "%WX_ROOT%core\runtime.py" %WX_CUDA_FLAG% >nul 2>&1
 if not errorlevel 1 (
     echo   Environment ready.
     echo.
@@ -110,29 +117,30 @@ echo         Done.
 
 :install_packages
 echo   [2/3] Installing PyTorch...
-nvidia-smi >nul 2>&1
-if not errorlevel 1 (
-    echo         NVIDIA GPU detected - installing CUDA 12.1 build
-    echo         Downloading ~2.5 GB, please be patient...
-    "%UV%" pip install --python "%PY%" torch torchaudio --index-url https://download.pytorch.org/whl/cu121 --quiet
-) else (
-    echo         No NVIDIA GPU - installing CPU build...
-    "%UV%" pip install --python "%PY%" torch torchaudio --index-url https://download.pytorch.org/whl/cpu --quiet
-)
+"%PY%" "%WX_ROOT%core\runtime.py" --torch-only %WX_CUDA_FLAG% >nul 2>&1
+if not errorlevel 1 goto :torch_ready
+echo         Installing compatible torch, torchaudio and torchvision wheels...
+"%UV%" pip install --python "%PY%" --reinstall-package torch --reinstall-package torchaudio --reinstall-package torchvision -r "%WX_REQUIREMENTS%" --quiet
 if errorlevel 1 (
     echo   ERROR: PyTorch install failed. Check your internet connection.
     goto :error
 )
 echo         Done.
 
+:torch_ready
 echo   [3/3] Installing WhisperX and UI dependencies...
 echo         Downloading ~500 MB, almost there...
-"%UV%" pip install --python "%PY%" whisperx customtkinter Pillow --quiet
+"%UV%" pip install --python "%PY%" -r "%WX_ROOT%requirements-core.txt" --quiet
 if errorlevel 1 (
     echo   ERROR: Package install failed.
     goto :error
 )
 echo         Done.
+"%PY%" "%WX_ROOT%core\runtime.py" %WX_CUDA_FLAG% >nul 2>&1
+if errorlevel 1 (
+    echo   ERROR: Dependency verification failed. See requirements files.
+    goto :error
+)
 
 echo.
 echo   Setup complete! The app will open now.

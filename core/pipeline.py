@@ -4,6 +4,48 @@ Shared by app.py (_worker) and transcribe.py (main).
 """
 import os
 import json
+import gc
+
+
+STANDARD_FORMATS = ("srt", "vtt", "txt", "tsv", "json")
+DIARIZATION_MODEL = "pyannote/speaker-diarization-community-1"
+_cuda_dll_directory = None
+
+
+def validate_diarization_options(enabled, min_speakers=None,
+                                 max_speakers=None, hf_token=None) -> tuple:
+    """Normalize optional speaker bounds; fail before loading any models."""
+    if not enabled:
+        return None, None
+
+    def speaker_count(value, label):
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise ValueError(f"{label} must be a positive integer or empty.")
+        try:
+            count = int(value)
+        except ValueError:
+            raise ValueError(f"{label} must be a positive integer or empty.") from None
+        if count < 1:
+            raise ValueError(f"{label} must be a positive integer or empty.")
+        return count
+
+    minimum = speaker_count(min_speakers, "Min speakers")
+    maximum = speaker_count(max_speakers, "Max speakers")
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ValueError("Min speakers cannot exceed Max speakers.")
+    if not isinstance(hf_token, str) or not hf_token.strip():
+        raise ValueError("Speaker diarization requires an HF Token. Enter it in Settings "
+                         "or set HF_TOKEN.")
+    return minimum, maximum
+
+
+def cleanup_memory() -> None:
+    import torch
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def format_srt_timestamp(seconds: float) -> str:
@@ -43,6 +85,16 @@ def detect_device(requested: str) -> tuple:
             device = "cpu"
     else:
         device = requested
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA is unavailable. Run setup to install CUDA PyTorch, "
+                           "check the NVIDIA driver, or select CPU.")
+    if device == "cuda" and os.name == "nt":
+        # CTranslate2 also needs to locate the CUDA/cuDNN DLLs shipped by torch.
+        global _cuda_dll_directory
+        lib_dir = os.path.join(os.path.dirname(torch.__file__), "lib")
+        if _cuda_dll_directory is None and os.path.isdir(lib_dir):
+            _cuda_dll_directory = os.add_dll_directory(lib_dir)
+            os.environ["PATH"] = lib_dir + os.pathsep + os.environ.get("PATH", "")
     t_dev = "cpu" if device == "mps" else device
     a_dev = device
     return device, t_dev, a_dev
@@ -245,6 +297,44 @@ def align(result: dict, detected_lang: str, a_dev: str, audio) -> dict:
 
     aligned.setdefault("language", detected_lang)
     return aligned
+
+
+def diarize(result: dict, audio, device: str, hf_token: str,
+            min_speakers: int | None = None, max_speakers: int | None = None,
+            model_dir: str | None = None, progress_cb=None) -> dict:
+    """Assign speaker labels using the already-decoded 16 kHz audio array."""
+    minimum, maximum = validate_diarization_options(
+        True, min_speakers, max_speakers, hf_token)
+    from whisperx.diarize import DiarizationPipeline, assign_word_speakers
+
+    model = None
+    try:
+        try:
+            model = DiarizationPipeline(
+                model_name=DIARIZATION_MODEL, token=hf_token.strip(),
+                device=device,
+                cache_dir=os.path.join(model_dir, "hub") if model_dir else None)
+        except Exception as exc:
+            response = getattr(exc, "response", None)
+            denied = getattr(response, "status_code", None) in (401, 403)
+            missing_pipeline = isinstance(exc, AttributeError) and "NoneType" in str(exc)
+            if denied or missing_pipeline or type(exc).__name__ == "GatedRepoError":
+                raise RuntimeError(
+                    "Could not access the diarization model. Check your HF Token's "
+                    "read permissions and accept the conditions at "
+                    f"https://huggingface.co/{DIARIZATION_MODEL}.") from exc
+            raise RuntimeError(f"Could not load the diarization model: {exc}") from exc
+        segments = model(audio, min_speakers=minimum, max_speakers=maximum,
+                         progress_callback=progress_cb)
+        return assign_word_speakers(segments, result)
+    except Exception as exc:
+        if "out of memory" in str(exc).lower():
+            raise RuntimeError("Diarization ran out of GPU memory. Close other GPU "
+                               "applications or select CPU.") from exc
+        raise
+    finally:
+        del model
+        cleanup_memory()
 
 
 def export(result: dict, formats: list, out_dir: str,

@@ -28,12 +28,18 @@ import traceback
 # corrupt them.  So: clone the real stdout into a private fd used ONLY for JSON,
 # then point fd 1 (and Python's sys.stdout) at stderr, which the parent
 # discards.  Every byte of library noise is dropped; only our events survive.
-try:
-    _JSON = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
-    os.dup2(2, 1)               # fd 1 -> fd 2 (parent discards stderr)
-    sys.stdout = sys.stderr     # Python-level prints -> stderr too
-except Exception:
-    _JSON = sys.stdout          # best-effort fallback
+_JSON = sys.stdout
+_HF_TOKEN = None
+
+
+def _isolate_json_channel():
+    global _JSON
+    try:
+        _JSON = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
+        os.dup2(2, 1)           # fd 1 -> fd 2 (parent discards stderr)
+        sys.stdout = sys.stderr
+    except OSError:
+        _JSON = sys.stdout
 
 # Make the `core` package importable regardless of how we were launched.
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -41,11 +47,15 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from core import pipeline
+from core.settings import SettingsError, redact_secrets, resolve_hf_token
 
 
 def _emit(obj):
     """Write one JSON event line to the private JSON channel and flush."""
     try:
+        if "m" in obj:
+            obj = dict(obj, m=redact_secrets(obj["m"], _HF_TOKEN,
+                                           os.environ.get("HF_TOKEN")))
         _JSON.write(json.dumps(obj, ensure_ascii=True) + "\n")
         _JSON.flush()
     except Exception:
@@ -98,6 +108,17 @@ class _DLProgress:
 
 
 def run(cfg):
+    global _HF_TOKEN
+    _HF_TOKEN = cfg.get("hf_token")
+    enabled = bool(cfg.get("diarize", False))
+    if enabled:
+        try:
+            _HF_TOKEN = resolve_hf_token(_HF_TOKEN)
+        except SettingsError as exc:
+            log(f"Warning: {exc}")
+            _HF_TOKEN = os.environ.get("HF_TOKEN", "").strip() or None
+    minimum, maximum = pipeline.validate_diarization_options(
+        enabled, cfg.get("min_speakers"), cfg.get("max_speakers"), _HF_TOKEN)
     if not cfg.get("model_dir"):
         cfg["model_dir"] = _default_model_dir()
     os.environ["HF_HOME"] = cfg["model_dir"]
@@ -146,12 +167,16 @@ def run(cfg):
     # ── Transcribe ─────────────────────────────────────────────────────────────
     log("Transcribing...")
     status("Transcribing...")
-    result, det = pipeline.transcribe(model, audio, cfg["batch"], lang)
+    try:
+        result, det = pipeline.transcribe(model, audio, cfg["batch"], lang)
+    finally:
+        del model
+        pipeline.cleanup_memory()
     log(f"  Language: {det}   Segments: {len(result['segments'])}")
 
     # ── Align ──────────────────────────────────────────────────────────────────
     needs_align = cfg["align"] and (
-        "word_json" in cfg["formats"] or cfg["highlight"])
+        "word_json" in cfg["formats"] or cfg["highlight"] or enabled)
     if needs_align:
         log("Aligning word timestamps...")
         status("Aligning...")
@@ -159,14 +184,41 @@ def run(cfg):
             result = pipeline.align(result, det, a_dev, audio)
         except Exception as e:
             log(f"  Alignment failed: {e} — continuing without word timestamps")
+            if enabled:
+                log("  Speaker labels will be assigned to segments only.")
             result.setdefault("language", det)
     else:
         result.setdefault("language", det)
 
+    # ── Diarize ────────────────────────────────────────────────────────────────
+    if enabled:
+        pipeline.cleanup_memory()
+        d_dev = "cuda" if t_dev == "cuda" else "cpu"
+        log(f"Loading diarization model... Device: {d_dev.upper()}")
+        status("Loading diarization model...")
+        pmode("indeterminate")
+        determinate = False
+
+        def diarization_progress(percent):
+            nonlocal determinate
+            if not determinate:
+                pmode("determinate")
+                determinate = True
+            value = min(100.0, max(0.0, float(percent)))
+            status(f"Diarizing... {value:.0f}%")
+            progress(value / 100.0)
+
+        result = pipeline.diarize(
+            result, audio, d_dev, _HF_TOKEN, minimum, maximum,
+            cfg["model_dir"], progress_cb=diarization_progress)
+        log("  Speaker labels assigned.")
+
     # ── Export ─────────────────────────────────────────────────────────────────
     log("Saving files...")
     status("Saving...")
+    pmode("indeterminate")
     last_path = None
+    export_errors = []
     for fmt, path, err in pipeline.export(
             result, cfg["formats"], cfg["out_dir"], cfg["audio"],
             {"max_width": cfg["max_width"],
@@ -174,21 +226,28 @@ def run(cfg):
              "highlight": cfg["highlight"]}):
         if err:
             log(f"  {fmt} error: {err}")
+            export_errors.append(fmt)
         else:
             log(f"  {fmt:<10}->  {path}")
             last_path = path
+
+    if export_errors:
+        raise RuntimeError("Could not export: " + ", ".join(export_errors))
 
     log("Done!")
     _emit({"t": "done", "path": last_path})
 
 
 def main():
+    _isolate_json_channel()
     raw = sys.stdin.readline()
     if not raw.strip():
         _emit({"t": "error", "m": "No configuration received."})
         sys.exit(1)
-    cfg = json.loads(raw)
     try:
+        cfg = json.loads(raw)
+        if not isinstance(cfg, dict):
+            raise ValueError("Configuration must be a JSON object.")
         run(cfg)
     except Exception as e:
         _emit({"t": "error", "m": f"{e}\n{traceback.format_exc()}"})

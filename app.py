@@ -7,6 +7,7 @@ import subprocess
 import webbrowser
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
+from core import pipeline, settings
 
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
@@ -129,6 +130,13 @@ class App(ctk.CTk):
         self._nav_key    = None
         self._device_combo = None  # populated by background probe
         self._proc       = None    # running transcription subprocess
+        self._active_hf_token = None
+        token_warning = ""
+        try:
+            self._saved_hf_token = settings.load_hf_token() or ""
+        except settings.SettingsError as exc:
+            self._saved_hf_token = ""
+            token_warning = str(exc)
 
         # All StringVars / BooleanVars — created here so any panel can use them
         self.v_file       = ctk.StringVar()
@@ -149,6 +157,13 @@ class App(ctk.CTk):
             "word_json": ctk.BooleanVar(value=False),
         }
         self.v_align      = ctk.BooleanVar(value=True)
+        self.v_diarize    = ctk.BooleanVar(value=False)
+        self.v_min_speakers = ctk.StringVar(value="")
+        self.v_max_speakers = ctk.StringVar(value="")
+        self.v_hf_token   = ctk.StringVar(value=self._saved_hf_token)
+        self._token_status = ctk.StringVar(value=token_warning or (
+            "Token saved in project settings.json" if self._saved_hf_token else
+            "Saved automatically in project settings.json; HF_TOKEN is a fallback."))
         self.v_vad        = ctk.BooleanVar(value=True)
         self.v_vad_onset  = ctk.StringVar(value="0.500")
         self.v_vad_offset = ctk.StringVar(value="0.363")
@@ -376,9 +391,9 @@ class App(ctk.CTk):
         p = ctk.CTkFrame(parent, fg_color="transparent")
         p.grid_columnconfigure(0, weight=1)
 
-        def glabel(text, row, top=14):
+        def glabel(text, row, top=8):
             ctk.CTkLabel(p, text=text, font=F(10, "bold"),
-                         text_color=_SECHI).grid(
+                         text_color=_SECHI, height=16).grid(
                 row=row, column=0, sticky="w", pady=(top, 6))
 
         # ── Header ─────────────────────────────────────────────────────────────
@@ -476,21 +491,55 @@ class App(ctk.CTk):
                           progress_color="#4a9eff").grid(
                 row=0, column=1, padx=(0, 12))
 
+        # ── Speaker diarization ────────────────────────────────────────────────
+        glabel("SPEAKER DIARIZATION", 10)
+        df = ctk.CTkFrame(p, fg_color=_CARD, corner_radius=8)
+        df.grid(row=11, column=0, sticky="ew")
+        df.grid_columnconfigure(1, weight=1)
+        ctk.CTkSwitch(
+            df, text="Enable", variable=self.v_diarize, width=100,
+            font=F(12), text_color=_TOGG_L, button_color="#4a9eff",
+            progress_color="#4a9eff", command=self._update_diarization_controls,
+        ).grid(row=0, column=0, padx=12, pady=10)
+        bounds = ctk.CTkFrame(df, fg_color="transparent")
+        bounds.grid(row=0, column=1, sticky="e", padx=(0, 12))
+        self._speaker_entries = []
+        for col, (label, var) in enumerate([
+            ("Min speakers", self.v_min_speakers),
+            ("Max speakers", self.v_max_speakers),
+        ]):
+            ctk.CTkLabel(bounds, text=label, font=F(10), text_color=_LABEL).grid(
+                row=0, column=col * 2, padx=(8, 6))
+            widget = entry(bounds, var, width=60)
+            widget.configure(height=32)
+            widget.grid(row=0, column=col * 2 + 1)
+            self._speaker_entries.append(widget)
+        self._update_diarization_controls()
+        ctk.CTkLabel(
+            p, text="Empty = automatic · Same min/max = known count · HF Token in Settings",
+            font=F(10), text_color=_HINT,
+        ).grid(row=12, column=0, sticky="w", pady=(4, 0))
+
         # Spacer pushes the action button to the bottom of the panel
-        p.grid_rowconfigure(10, weight=1)
+        p.grid_rowconfigure(13, weight=1)
 
         # ── Primary action button ──────────────────────────────────────────────
         self._run_btn = ctk.CTkButton(
             p, text="▶   Transcribe", height=46, corner_radius=12,
             fg_color="#4a9eff", hover_color="#6ab0ff", text_color="#ffffff",
             font=F(15, "bold"), command=self._on_run)
-        self._run_btn.grid(row=11, column=0, sticky="ew", pady=(16, 2))
+        self._run_btn.grid(row=14, column=0, sticky="ew", pady=(10, 2))
 
         return p
 
     def _toggle_fmt(self, key):
         self.v_fmts[key].set(not self.v_fmts[key].get())
         self._update_fmt_chip(key)
+
+    def _update_diarization_controls(self):
+        state = "normal" if self.v_diarize.get() else "disabled"
+        for widget in self._speaker_entries:
+            widget.configure(state=state)
 
     def _update_fmt_chip(self, key):
         btn = self._fmt_chips.get(key)
@@ -508,7 +557,9 @@ class App(ctk.CTk):
     # ── Settings panel — advanced / rarely-touched config ─────────────────────
 
     def _panel_settings(self, parent):
-        p = ctk.CTkFrame(parent, fg_color="transparent")
+        p = ctk.CTkScrollableFrame(parent, fg_color="transparent",
+                                   scrollbar_button_color=_SCRL_B,
+                                   scrollbar_button_hover_color=_SCRL_H)
         p.grid_columnconfigure(0, weight=1)
 
         def glabel(text, row, top=14):
@@ -595,7 +646,63 @@ class App(ctk.CTk):
                       fg_color=_MID, hover_color=_MIDHOV, font=F(14),
                       command=self._browse_model_dir).grid(row=0, column=1)
 
+        glabel("HUGGING FACE TOKEN", 12)
+        tr = ctk.CTkFrame(p, fg_color="transparent")
+        tr.grid(row=13, column=0, sticky="ew")
+        tr.grid_columnconfigure(0, weight=1)
+        self._token_entry = entry(tr, self.v_hf_token)
+        self._token_entry.configure(show="•")
+        self._token_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self._token_entry.bind("<FocusOut>", self._save_hf_token)
+        ctk.CTkButton(
+            tr, text="Forget token", width=104, height=36, corner_radius=8,
+            fg_color=_MID, hover_color=_MIDHOV, font=F(11),
+            command=self._forget_hf_token,
+        ).grid(row=0, column=1)
+        ctk.CTkLabel(
+            p, textvariable=self._token_status, font=F(10), text_color=_HINT,
+            wraplength=540, justify="left",
+        ).grid(row=14, column=0, sticky="w", pady=(5, 0))
+        links = ctk.CTkFrame(p, fg_color="transparent")
+        links.grid(row=15, column=0, sticky="w", pady=(6, 12))
+        for col, (label, url) in enumerate([
+            ("Create read token", "https://huggingface.co/settings/tokens"),
+            ("Accept model conditions", f"https://huggingface.co/{pipeline.DIARIZATION_MODEL}"),
+        ]):
+            ctk.CTkButton(
+                links, text=label, height=28, fg_color="transparent",
+                hover_color=_NAVHOV, text_color="#4a9eff", font=F(11),
+                command=lambda u=url: webbrowser.open(u),
+            ).grid(row=0, column=col, padx=(0, 6))
+
         return p
+
+    def _save_hf_token(self, event=None):
+        token = self.v_hf_token.get().strip()
+        if token == self._saved_hf_token:
+            return True
+        try:
+            settings.save_hf_token(token)
+        except settings.SettingsError as exc:
+            warning = settings.redact_secrets(exc, token)
+            self._token_status.set(warning)
+            self._log(f"Warning: {warning} The current token can still be used.")
+            return False
+        self._saved_hf_token = token
+        self._token_status.set("Token saved in project settings.json" if token else
+                               "Saved token removed. HF_TOKEN is still a fallback.")
+        return True
+
+    def _forget_hf_token(self):
+        try:
+            settings.delete_hf_token()
+        except settings.SettingsError as exc:
+            self._token_status.set(str(exc))
+            self._log(f"Warning: {exc}")
+            return
+        self.v_hf_token.set("")
+        self._saved_hf_token = ""
+        self._token_status.set("Saved token removed. HF_TOKEN is still a fallback.")
 
     # ── Support dialog ────────────────────────────────────────────────────────
 
@@ -725,7 +832,8 @@ class App(ctk.CTk):
     # ── Log helpers ───────────────────────────────────────────────────────────
 
     def _log(self, msg):
-        self._q.put(str(msg))
+        self._q.put(settings.redact_secrets(
+            msg, self._active_hf_token, self._saved_hf_token, os.environ.get("HF_TOKEN")))
         self.after(0, self._show_log)
 
     def _clear_log(self):
@@ -795,6 +903,22 @@ class App(ctk.CTk):
                                  "Select at least one output format.")
             return
 
+        self._save_hf_token()
+        enabled = bool(self.v_diarize.get())
+        token = self.v_hf_token.get().strip() or None
+        if enabled:
+            try:
+                token = settings.resolve_hf_token(token)
+            except settings.SettingsError as exc:
+                self._log(f"Warning: {exc}")
+                token = os.environ.get("HF_TOKEN", "").strip() or None
+        try:
+            minimum, maximum = pipeline.validate_diarization_options(
+                enabled, self.v_min_speakers.get(), self.v_max_speakers.get(), token)
+        except ValueError as exc:
+            messagebox.showerror("Speaker diarization", str(exc))
+            return
+
         def safe_int(s, default):
             try: return int(s)
             except Exception: return default
@@ -815,6 +939,10 @@ class App(ctk.CTk):
             "out_dir":    self.v_out_dir.get().strip(),
             "formats":    [k for k, v in self.v_fmts.items() if v.get()],
             "align":      bool(self.v_align.get()),
+            "diarize":    enabled,
+            "min_speakers": minimum,
+            "max_speakers": maximum,
+            "hf_token":   token if enabled else None,
             "language":   self._lang_map.get(self.v_lang.get(), "auto"),
             "vad":        bool(self.v_vad.get()),
             "vad_onset":  safe_float(self.v_vad_onset.get(), 0.5),
@@ -827,6 +955,7 @@ class App(ctk.CTk):
         }
 
         self._stop.clear()
+        self._active_hf_token = cfg["hf_token"]
         self._run_btn.configure(state="disabled", text="Transcribing…",
                                 fg_color="#2a5a8a")
         self._stop_btn.configure(state="normal", text_color=("#cc3333", "#ff453a"),
@@ -839,6 +968,8 @@ class App(ctk.CTk):
         self._start_proc(cfg)
 
     def _on_close(self):
+        if not self._save_hf_token():
+            messagebox.showwarning("HF Token not saved", self._token_status.get())
         self._stop.set()
         self._kill_proc()
         try:
@@ -946,6 +1077,7 @@ class App(ctk.CTk):
                     pass
             self.after(4000, self._hide_log)
         self._proc = None
+        self._active_hf_token = None
         self._reset_btns()
 
     def _reset_btns(self):
