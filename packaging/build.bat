@@ -11,8 +11,7 @@ echo.
 set "ROOT=%~dp0.."
 set "VENV=%ROOT%\.venv"
 set "PY=%VENV%\Scripts\python.exe"
-set "PIP=%VENV%\Scripts\pip.exe"
-set "PYINST=%VENV%\Scripts\pyinstaller.exe"
+set "UV=%ROOT%\.tools\uv\uv.exe"
 set "DIST=%ROOT%\dist\WhisperXTranscriber"
 
 rem -- Check venv ---------------------------------------------------------------
@@ -21,20 +20,27 @@ if not exist "%PY%" (
     echo   Run run.bat once to create the environment, then re-run this script.
     echo.
     exit /b 1
-    exit /b 1
 )
 
 rem -- Install build tools ------------------------------------------------------
 echo   [1/4] Checking build tools...
-"%PY%" -c "import PyInstaller" >nul 2>&1
-if errorlevel 1 (
-    echo         Installing PyInstaller...
-    "%PIP%" install pyinstaller --quiet
+if not exist "%UV%" (
+    where uv.exe >nul 2>&1
+    if errorlevel 1 (
+        echo   ERROR: uv not found. Run run.bat once, then retry the build.
+        exit /b 1
+    )
+    set "UV=uv.exe"
 )
-"%PY%" -c "import PIL" >nul 2>&1
+
+"%PY%" -c "import PyInstaller, PIL" >nul 2>&1
 if errorlevel 1 (
-    echo         Installing Pillow...
-    "%PIP%" install Pillow --quiet
+    echo         Installing PyInstaller and Pillow into .venv...
+    "%UV%" pip install --python "%PY%" pyinstaller Pillow --quiet
+    if errorlevel 1 (
+        echo   ERROR: Could not install build tools into .venv.
+        exit /b 1
+    )
 )
 echo         Done.
 
@@ -42,11 +48,10 @@ rem -- Build thin launcher -----------------------------------------------------
 echo   [2/4] Building thin launcher (no torch / no whisperx)...
 echo         This should be fast - only GUI deps are bundled.
 echo.
-"%PYINST%" "%ROOT%\packaging\launcher.spec" --noconfirm --distpath "%ROOT%\dist"
+"%PY%" -m PyInstaller "%ROOT%\packaging\launcher.spec" --noconfirm --distpath "%ROOT%\dist"
 if errorlevel 1 (
     echo.
     echo   ERROR: PyInstaller build failed.
-    exit /b 1
     exit /b 1
 )
 echo.
@@ -89,7 +94,6 @@ if exist "%ZIP%" del /f "%ZIP%"
 "%PY%" "%ROOT%\packaging\release.py" "%DIST%" "%ZIP%"
 if errorlevel 1 (
     echo   ERROR: Zip creation failed.
-    exit /b 1
     exit /b 1
 )
 
