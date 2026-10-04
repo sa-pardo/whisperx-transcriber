@@ -117,7 +117,7 @@ dist/
 
 Before tagging a new release:
 
-- [ ] Update `version.txt` (root of repo)
+- [ ] Update `version.txt` and add the release entry to `CHANGELOG.md`
 - [ ] Delete `dist/` and run `packaging\build.bat` clean
 - [ ] Test `dist/WhisperXTranscriber/WhisperXTranscriber.exe` directly before zipping
 - [ ] Test the zip on a clean machine (no prior runtime/ installed)
@@ -129,8 +129,9 @@ Before tagging a new release:
 
 ## Version bump
 
-One file to update per release:
+Update both release-version references:
 
 ```
-version.txt    ← plain version string, e.g. 1.0.1
+version.txt    ← plain product version, e.g. 1.3.0
+CHANGELOG.md   ← matching release heading, e.g. [v1.3.0]
 ```

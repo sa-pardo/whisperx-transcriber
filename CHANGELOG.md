@@ -4,6 +4,8 @@ All notable changes to WhisperX Transcriber are documented here.
 
 ## [Unreleased]
 
+## [v1.3.0] — 2026-10-04
+
 ### Added
 - Optional speaker diarization in the GUI and CLI, with minimum/maximum speaker
   bounds and word/segment speaker labels through WhisperX Community-1.
