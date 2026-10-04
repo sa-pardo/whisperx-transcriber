@@ -2,6 +2,13 @@
 
 All notable changes to WhisperX Transcriber are documented here.
 
+## [Unreleased]
+
+### Changed
+- Windows `run.bat` reuses local `.venv` Python and local or PATH-installed uv,
+  downloading uv and Python inside the project when missing. Package installation
+  uses uv and resumes when an existing virtual environment lacks dependencies.
+
 ## [v1.2.0] — 2026-06-09
 
 ### Added

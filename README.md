@@ -220,7 +220,7 @@ The GUI exposes **20 languages** with a dropdown. The underlying model supports 
 
 ### Requirements
 
-- Python 3.10, 3.11, 3.12, or 3.13
+- Python 3.10, 3.11, 3.12, or 3.13 (on Windows, `run.bat` downloads Python locally if `.venv` is missing)
 - Git
 - Windows (Linux/macOS supported via `run.sh`, GUI features may vary)
 - NVIDIA GPU recommended but not required
@@ -236,6 +236,14 @@ bash run.sh      # macOS / Linux
 
 `run.bat` / `run.sh` creates a `.venv`, detects your GPU, installs everything,
 and launches the app. Every subsequent run opens instantly.
+
+On Windows, `run.bat` first checks `.venv\Scripts\python.exe` and reuses it
+without requiring a global Python installation. It uses `.tools\uv\uv.exe`
+or an existing `uv.exe` on `PATH`; if neither works, it downloads uv into
+`.tools\uv`. When `.venv` is missing, uv installs Python 3.11.16 into
+`.tools\python` and creates the virtual environment. Downloads are cached in
+`.cache\uv`. No global Python installation or permanent PATH change is needed.
+An existing environment with missing dependencies resumes package installation.
 
 ### Project structure
 
