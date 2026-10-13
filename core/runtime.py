@@ -28,7 +28,8 @@ def cuda_torch_index() -> str | None:
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
         result = subprocess.run(["nvidia-smi"], **kwargs)
-        match = re.search(r"CUDA Version:\s*(\d+)\.(\d+)", result.stdout)
+        # Newer drivers report "CUDA UMD Version" instead of "CUDA Version".
+        match = re.search(r"CUDA(?: UMD)? Version:\s*(\d+)\.(\d+)", result.stdout)
         if result.returncode != 0 or match is None:
             return None
         version = tuple(map(int, match.groups()))
