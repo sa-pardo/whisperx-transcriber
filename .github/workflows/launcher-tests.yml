@@ -1,0 +1,27 @@
+name: Launcher regression tests
+
+on:
+  pull_request:
+    paths:
+      - launcher.py
+      - core/runtime.py
+      - tests/test_launcher.py
+      - tests/test_runtime.py
+      - .github/workflows/launcher-tests.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launcher-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test runner
+        run: python -m pip install pytest
+      - name: Test launcher and CUDA detection
+        run: python -m pytest -q tests/test_launcher.py tests/test_runtime.py
