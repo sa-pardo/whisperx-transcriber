@@ -78,6 +78,12 @@ def _launch_app() -> None:
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
 
+    # PyInstaller's Tkinter hook sets these to its bundled Tcl/Tk data.
+    # The separately installed runtime Python must use its own Tcl/Tk version.
+    if getattr(sys, "frozen", False):
+        env.pop("TCL_LIBRARY", None)
+        env.pop("TK_LIBRARY", None)
+
     # Prepend bundled ffmpeg binaries to PATH so whisperx.load_audio can find ffmpeg
     ffmpeg_bin = os.path.join(base, "runtime", "Lib", "site-packages",
                               "imageio_ffmpeg", "binaries")
