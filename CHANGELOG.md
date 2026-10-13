@@ -4,6 +4,13 @@ All notable changes to WhisperX Transcriber are documented here.
 
 ## [Unreleased]
 
+## [v1.3.2] — 2026-10-13
+
+### Fixed
+- Prevent the PyInstaller launcher from passing its bundled Tcl/Tk library paths
+  to the external Python runtime. This resolves silent startup failures when
+  the bundled Tcl/Tk version differs from the runtime's version.
+
 ## [v1.3.1] — 2026-10-13
 
 ### Fixed
