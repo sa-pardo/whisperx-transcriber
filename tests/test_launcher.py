@@ -1,8 +1,6 @@
 """Regression tests for the thin PyInstaller launcher's child process environment."""
 
 import os
-from pathlib import Path
-
 import pytest
 
 import launcher
