@@ -4,6 +4,12 @@ All notable changes to WhisperX Transcriber are documented here.
 
 ## [Unreleased]
 
+## [v1.3.1] — 2026-10-13
+
+### Fixed
+- Detect NVIDIA CUDA support from both `CUDA Version` and `CUDA UMD Version`
+  in `nvidia-smi`, so newer compatible drivers select GPU PyTorch wheels.
+
 ## [v1.3.0] — 2026-10-04
 
 ### Added
