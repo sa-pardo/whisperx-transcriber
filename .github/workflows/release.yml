@@ -1,0 +1,94 @@
+name: Build and publish Windows release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - version.txt
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content version.txt -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Invalid version.txt value: $version"
+          }
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check for existing release
+        id: existing
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          gh release view $tag --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "found=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "found=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Install thin-launcher build dependencies
+        if: steps.existing.outputs.found == 'false'
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\.venv\Scripts\python.exe -m pip install "pyinstaller>=6.0" "Pillow>=9.0.0" "customtkinter>=5.2.2"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build portable ZIP
+        if: steps.existing.outputs.found == 'false'
+        shell: cmd
+        run: call packaging\build.bat
+
+      - name: Verify release archive
+        if: steps.existing.outputs.found == 'false'
+        shell: pwsh
+        run: |
+          $archive = "dist/release/WhisperXTranscriber.zip"
+          if (-not (Test-Path $archive)) { throw "Release ZIP was not created" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $archive).Path)
+          try {
+            $names = @($zip.Entries | ForEach-Object { $_.FullName })
+            foreach ($required in @("WhisperXTranscriber.exe", "core/runtime.py", "version.txt")) {
+              if (-not ($names -contains $required)) { throw "ZIP missing $required" }
+            }
+          } finally {
+            $zip.Dispose()
+          }
+
+      - name: Publish GitHub release
+        if: steps.existing.outputs.found == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          gh release create $tag "dist/release/WhisperXTranscriber.zip" --target $env:GITHUB_SHA --title "WhisperX Transcriber $tag" --generate-notes --latest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
