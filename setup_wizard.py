@@ -15,7 +15,9 @@ import threading
 import urllib.request
 import webbrowser
 import customtkinter as ctk
-from core.runtime import SETUP_VERSION, cuda_torch_index, has_nvidia
+from core.runtime import (
+    EXIT_NEEDS_SETUP, EXIT_READY, SETUP_VERSION, cuda_torch_index, has_nvidia,
+)
 
 _PYTHON_VERSION   = "3.13.7"
 _PYTHON_URL       = f"https://www.python.org/ftp/python/{_PYTHON_VERSION}/python-{_PYTHON_VERSION}-amd64.exe"
@@ -130,7 +132,10 @@ def _find_python_fresh() -> str | None:
 # ── Wizard ────────────────────────────────────────────────────────────────────
 
 class SetupWizard:
-    def __init__(self, base_dir: str, on_complete):
+    def __init__(self, base_dir: str, on_complete, reason: str | None = None,
+                 *, repair: bool = False):
+        self.reason = reason
+        self.repair = repair
         self.base_dir    = base_dir
         self.on_complete = on_complete
         self.runtime_dir = os.path.join(base_dir, "runtime")
@@ -165,7 +170,8 @@ class SetupWizard:
         hdr.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(hdr, text="WhisperX Transcriber", font=_F(20, "bold"),
                      text_color="#ffffff").grid(row=0, column=0, pady=(20, 2))
-        ctk.CTkLabel(hdr, text="First-time Setup", font=_F(12),
+        ctk.CTkLabel(hdr, text="Setup / Repair" if self.reason else "First-time Setup",
+                     font=_F(12),
                      text_color="#666666").grid(row=1, column=0, pady=(0, 16))
 
         # Content (swappable)
@@ -193,7 +199,10 @@ class SetupWizard:
         ctk.CTkLabel(b, text="Welcome", font=_F(22, "bold"),
                      text_color=_PRI).grid(row=0, column=0, sticky="w", pady=(0, 6))
         ctk.CTkLabel(b,
-                     text=("This wizard installs the AI transcription engine.\n"
+                     text=("Repair rebuilds runtime/ and reinstalls all backend dependencies.\n"
+                           "Models and settings.json are kept. Downloads may be required.\n"
+                           "Close other app instances before beginning repair.") if self.repair else
+                          ("This wizard installs the AI transcription engine.\n"
                             "Includes: torch · whisperX · ffmpeg · all dependencies.\n"
                             "This is a one-time 1–3 GB download (2–5 GB on disk).\n"
                             "Subsequent launches open instantly."),
@@ -240,9 +249,17 @@ class SetupWizard:
                          font=_F(10), text_color=_HINT,
                          ).grid(row=1, column=0, padx=16, pady=(0, 10), sticky="w")
 
+        if self.reason:
+            ctk.CTkLabel(
+                b, text=f"Setup required: {self.reason}", font=_F(11),
+                text_color="#ffaa00", wraplength=500, justify="left",
+            ).grid(row=4, column=0, sticky="w", pady=(0, 4))
+
         # Footer
         if self.python_path:
-            ctk.CTkButton(self.ftr, text="Begin Setup →", width=160, height=40,
+            ctk.CTkButton(self.ftr,
+                          text="Begin Repair" if self.repair else "Begin Setup →",
+                          width=160, height=40,
                           font=_F(13, "bold"), fg_color="#4a9eff", hover_color="#6ab0ff",
                           command=self._start_install,
                           ).grid(row=0, column=0, pady=13, padx=18, sticky="e")
@@ -546,6 +563,26 @@ class SetupWizard:
         if hasattr(self, "_status_var"):
             self._status_var.set("Installing packages (this can take a few minutes)...")
 
+    def _probe_runtime(self, command: list[str]) -> bool:
+        env = os.environ.copy()
+        env["PYTHONUTF8"] = "1"
+        if getattr(sys, "frozen", False):
+            env.pop("TCL_LIBRARY", None)
+            env.pop("TK_LIBRARY", None)
+        result = subprocess.run(
+            command, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=120, env=env,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        if result.stderr:
+            self._log(result.stderr.strip())
+        if result.returncode not in (EXIT_READY, EXIT_NEEDS_SETUP):
+            raise RuntimeError(
+                f"Dependency probe failed unexpectedly (exit {result.returncode}). "
+                "See the log above."
+            )
+        return result.returncode == EXIT_READY
+
     def _run_install(self):
         try:
             self._real_progress_seen = False
@@ -553,6 +590,20 @@ class SetupWizard:
             runtime = self.runtime_dir
             venv_py  = os.path.join(runtime, "Scripts", "python.exe")
             venv_pip = os.path.join(runtime, "Scripts", "pip.exe")
+            flag = os.path.join(runtime, ".setup_complete")
+            # No stale success marker may survive a failed/interrupted install.
+            try:
+                os.remove(flag)
+            except FileNotFoundError:
+                pass
+
+            if self.repair and os.path.exists(runtime):
+                # Rebuild only the managed venv, including transitive packages.
+                # This avoids pip treating corrupt files as already satisfied
+                # and preserves Models/ and settings.json beside runtime/.
+                self._set_status("Rebuilding runtime for repair...")
+                self._log("Repair: removing the old runtime and reinstalling dependencies.")
+                shutil.rmtree(runtime)  # Do not continue after a partial deletion.
 
             # 1. Create venv — recreate if it exists but was built with an
             #    incompatible Python version (e.g. 3.14 has no ctranslate2 wheel)
@@ -569,7 +620,7 @@ class SetupWizard:
             needs_create = not os.path.isfile(venv_py)
             if not needs_create and _venv_minor() >= 14:
                 self._log("Existing venv uses Python 3.14+ — recreating with compatible version.\n")
-                shutil.rmtree(runtime, ignore_errors=True)
+                shutil.rmtree(runtime)
                 needs_create = True
 
             if needs_create:
@@ -598,11 +649,7 @@ class SetupWizard:
             torch_index = _cuda_torch_index()
             probe = [venv_py, os.path.join(self.base_dir, "core", "runtime.py")]
             cuda_flag = ["--cuda"] if torch_index else []
-            check = subprocess.run(
-                probe + ["--torch-only"] + cuda_flag,
-                capture_output=True, timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW)
-            if check.returncode != 0:
+            if not self._probe_runtime(probe + ["--torch-only"] + cuda_flag):
                 kind = "gpu" if torch_index else "cpu"
                 self._set_status(f"Installing compatible PyTorch ({kind.upper()})...")
                 self._log(f"\n[torch] Installing {kind.upper()} wheels...")
@@ -629,15 +676,11 @@ class SetupWizard:
                 self.win.after(0, lambda: self._prog.configure(mode="determinate"))
             if rc != 0:
                 raise RuntimeError("Core dependencies install failed — see the log above.")
-            check = subprocess.run(
-                probe + cuda_flag, capture_output=True, timeout=30,
-                creationflags=subprocess.CREATE_NO_WINDOW)
-            if check.returncode != 0:
+            if not self._probe_runtime(probe + cuda_flag):
                 raise RuntimeError("Dependency verification failed after installation.")
             self._set_progress(0.95)
 
-            # 4. Mark complete
-            flag = os.path.join(runtime, ".setup_complete")
+            # 4. Mark complete only after the real import smoke test succeeds.
             with open(flag, "w", encoding="utf-8") as fh:
                 fh.write(SETUP_VERSION)
 

@@ -184,6 +184,21 @@ The GUI exposes **20 languages** with a dropdown. The underlying model supports 
 
 ## Troubleshooting
 
+**Setup wizard appears again after a successful installation** — The launcher
+checks the local Python runtime, the versioned setup marker, FFmpeg, and
+installed package metadata. It does not load PyTorch/CUDA on each launch.
+If a metadata probe times out, WhisperX attempts to start rather than
+reinstalling automatically; the reason is recorded in `startup-warning.log`
+beside the executable.
+
+**Application fails to open** — The portable launcher displays the startup
+exception and saves a traceback to `startup-error.log` beside the executable.
+Choose **Yes** to open the repair wizard, or run
+`WhisperXTranscriber.exe --repair` from a terminal to repair manually.
+Repair removes and recreates the managed `runtime/` environment and reinstalls
+the backend dependencies (a multi-GB download may be needed). It keeps
+`Models/` and `settings.json`, but close other app instances first.
+
 **"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH". Re-run the app.
 
 **Setup fails mid-download** — Click **Retry**. The wizard resumes and skips already-installed packages.

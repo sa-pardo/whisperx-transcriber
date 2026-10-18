@@ -60,6 +60,7 @@ echo         Done.
 rem -- Stage source files into dist ---------------------------------------------
 echo   [3/4] Copying source files into dist...
 copy /Y "%ROOT%\app.py"           "%DIST%\app.py"           >nul
+copy /Y "%ROOT%\app_bootstrap.py" "%DIST%\app_bootstrap.py" >nul
 copy /Y "%ROOT%\setup_wizard.py"  "%DIST%\setup_wizard.py"  >nul
 copy /Y "%ROOT%\transcribe.py"    "%DIST%\transcribe.py"    >nul
 copy /Y "%ROOT%\version.txt"      "%DIST%\version.txt"      >nul

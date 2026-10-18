@@ -1,10 +1,17 @@
 """Small dependency probe usable from either local Python launcher."""
 import argparse
-from importlib import metadata, util
+from importlib import import_module, metadata, util
 import subprocess
 import sys
 import re
+import traceback
 
+
+# Exit 1 is reserved for probe failures (including unhandled Python errors),
+# not missing packages. The launcher may request setup only for exit 10.
+EXIT_READY = 0
+EXIT_NEEDS_SETUP = 10
+EXIT_PROBE_ERROR = 1
 
 SETUP_VERSION = "diarization-v1"
 TORCH_VERSIONS = {"torch": "2.8.0", "torchaudio": "2.8.0", "torchvision": "0.23.0"}
@@ -46,38 +53,63 @@ def _versions_match(versions) -> bool:
         return False
 
 
-def torch_ready(require_cuda=False) -> bool:
+def torch_ready(require_cuda=False, *, quick=False) -> bool:
     if not _versions_match(TORCH_VERSIONS):
         return False
-    if require_cuda:
-        try:
-            import torch
-            # An installed CUDA build with a driver problem needs a driver fix,
-            # not repeated package downloads on every launch.
-            return torch.version.cuda is not None
-        except (ImportError, OSError):
-            return False
-    return True
+    if quick:
+        # Startup never loads native libraries, even when checking a CUDA tag.
+        return not require_cuda or "+cu" in metadata.version("torch").lower()
+    try:
+        torch = import_module("torch")
+        import_module("torchaudio")
+        import_module("torchvision")
+        # Validate CPU imports too. A wheel's metadata can survive missing or
+        # corrupt DLLs. Driver availability is not a reason to reinstall.
+        return not require_cuda or torch.version.cuda is not None
+    except Exception:
+        traceback.print_exc()
+        return False
 
 
-def dependencies_ready(require_cuda=False) -> bool:
-    return (torch_ready(require_cuda) and _versions_match(ENGINE_VERSIONS)
+def dependencies_ready(require_cuda=False, *, quick=False) -> bool:
+    if not (torch_ready(require_cuda, quick=quick) and _versions_match(ENGINE_VERSIONS)
             and all(util.find_spec(name) is not None
-                    for name in ("customtkinter", "PIL", "imageio_ffmpeg")))
+                    for name in ("customtkinter", "PIL", "imageio_ffmpeg"))):
+        return False
+    if quick:
+        return True
+    try:
+        # Installation/repair smoke test: import without downloading AI models
+        # or creating a GUI. Import PIL.Image, not just the package stub.
+        for name in ("whisperx", "pyannote.audio", "torchcodec",
+                     "customtkinter", "PIL.Image", "imageio_ffmpeg"):
+            import_module(name)
+    except Exception:
+        traceback.print_exc()
+        return False
+    return True
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--torch-only", action="store_true")
+    parser.add_argument("--quick", action="store_true",
+                        help="Check package metadata without importing PyTorch.")
     parser.add_argument("--cuda-index", action="store_true",
                         help="Print the compatible CUDA wheel index, or an empty line.")
     args = parser.parse_args()
     if args.cuda_index:
         print(cuda_torch_index() or "")
         return 0
-    ready = torch_ready(args.cuda) if args.torch_only else dependencies_ready(args.cuda)
-    return 0 if ready else 1
+    try:
+        ready = (torch_ready(args.cuda, quick=args.quick) if args.torch_only
+                 else dependencies_ready(args.cuda, quick=args.quick))
+    except Exception:
+        # Metadata/read failures are inconclusive, not an installation verdict.
+        traceback.print_exc()
+        return EXIT_PROBE_ERROR
+    return EXIT_READY if ready else EXIT_NEEDS_SETUP
 
 
 if __name__ == "__main__":
