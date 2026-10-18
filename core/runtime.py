@@ -46,10 +46,14 @@ def _versions_match(versions) -> bool:
         return False
 
 
-def torch_ready(require_cuda=False) -> bool:
+def torch_ready(require_cuda=False, *, quick=False) -> bool:
     if not _versions_match(TORCH_VERSIONS):
         return False
     if require_cuda:
+        if quick:
+            # Inspect the wheel's CUDA tag without importing the large torch
+            # native libraries. Full validation still runs during setup.
+            return "+cu" in metadata.version("torch").lower()
         try:
             import torch
             # An installed CUDA build with a driver problem needs a driver fix,
@@ -60,8 +64,8 @@ def torch_ready(require_cuda=False) -> bool:
     return True
 
 
-def dependencies_ready(require_cuda=False) -> bool:
-    return (torch_ready(require_cuda) and _versions_match(ENGINE_VERSIONS)
+def dependencies_ready(require_cuda=False, *, quick=False) -> bool:
+    return (torch_ready(require_cuda, quick=quick) and _versions_match(ENGINE_VERSIONS)
             and all(util.find_spec(name) is not None
                     for name in ("customtkinter", "PIL", "imageio_ffmpeg")))
 
@@ -70,13 +74,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cuda", action="store_true")
     parser.add_argument("--torch-only", action="store_true")
+    parser.add_argument("--quick", action="store_true",
+                        help="Check package metadata without importing PyTorch.")
     parser.add_argument("--cuda-index", action="store_true",
                         help="Print the compatible CUDA wheel index, or an empty line.")
     args = parser.parse_args()
     if args.cuda_index:
         print(cuda_torch_index() or "")
         return 0
-    ready = torch_ready(args.cuda) if args.torch_only else dependencies_ready(args.cuda)
+    ready = (torch_ready(args.cuda, quick=args.quick) if args.torch_only
+             else dependencies_ready(args.cuda, quick=args.quick))
     return 0 if ready else 1
 
 
