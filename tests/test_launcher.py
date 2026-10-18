@@ -96,7 +96,7 @@ def test_missing_dependencies_require_setup(monkeypatch, tmp_path):
     _create_installed_runtime(monkeypatch, tmp_path)
     monkeypatch.setattr(
         launcher.subprocess, "run",
-        lambda command, **kwargs: subprocess.CompletedProcess(command, 1),
+        lambda command, **kwargs: subprocess.CompletedProcess(command, launcher.EXIT_NEEDS_SETUP),
     )
 
     status, reason = launcher._runtime_status()
@@ -191,6 +191,70 @@ def test_explicit_repair_opens_wizard_without_probe(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "setup_wizard", types.SimpleNamespace(SetupWizard=FakeWizard))
     launcher.main()
 
+    assert wizard_arguments[0]["repair"] is True
     assert wizard_arguments[0]["reason"] == "Repair requested by user."
     assert wizard_arguments[0]["base_dir"] == str(tmp_path)
     assert wizard_arguments[1] == "run"
+
+
+@pytest.mark.parametrize("returncode", [1, 2, -11])
+def test_unexpected_probe_exit_logs_stderr_and_attempts_launch(monkeypatch, tmp_path, returncode):
+    _create_installed_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(launcher.sys, "argv", ["WhisperXTranscriber.exe"])
+    monkeypatch.setattr(
+        launcher.subprocess, "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, returncode, stderr=b"Traceback: metadata read failed\xff"),
+    )
+    launches = []
+    monkeypatch.setattr(launcher, "_launch_app", lambda: launches.append(True))
+
+    launcher.main()
+
+    assert launches == [True]
+    log = (tmp_path / "startup-warning.log").read_text(encoding="utf-8")
+    assert str(returncode) in log
+    assert "metadata read failed" in log
+
+
+def test_real_probe_exception_does_not_open_setup(monkeypatch, tmp_path):
+    import sys
+
+    _, probe, _ = _create_installed_runtime(monkeypatch, tmp_path)
+    probe.write_text('raise OSError("metadata read failed")\n', encoding="utf-8")
+    monkeypatch.setattr(launcher.sys, "argv", ["WhisperXTranscriber.exe"])
+    real_run = subprocess.run
+
+    def run_with_test_python(command, **kwargs):
+        # Exercise a real failing child interpreter, not a mocked return code.
+        return real_run([sys.executable, *command[1:]], **kwargs)
+
+    monkeypatch.setattr(launcher.subprocess, "run", run_with_test_python)
+    launches = []
+    monkeypatch.setattr(launcher, "_launch_app", lambda: launches.append(True))
+    launcher.main()
+
+    assert launches == [True]
+    log = (tmp_path / "startup-warning.log").read_text(encoding="utf-8")
+    assert "code 1" in log
+    assert "Traceback" in log
+    assert "OSError: metadata read failed" in log
+
+
+def test_automatic_setup_does_not_request_destructive_repair(monkeypatch, tmp_path):
+    import sys
+    from types import SimpleNamespace
+
+    arguments = []
+    monkeypatch.setattr(launcher.sys, "argv", ["WhisperXTranscriber.exe"])
+    monkeypatch.setattr(launcher, "_base_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher, "_runtime_status",
+                        lambda: (launcher.RuntimeStatus.NEEDS_SETUP, "Missing dependency"))
+
+    def wizard(**kwargs):
+        arguments.append(kwargs)
+        return SimpleNamespace(run=lambda: None)
+
+    monkeypatch.setitem(sys.modules, "setup_wizard", SimpleNamespace(SetupWizard=wizard))
+    launcher.main()
+    assert arguments[0]["repair"] is False

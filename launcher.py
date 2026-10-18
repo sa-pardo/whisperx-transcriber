@@ -14,7 +14,7 @@ import subprocess
 import shutil
 from datetime import datetime
 from enum import Enum
-from core.runtime import SETUP_VERSION
+from core.runtime import EXIT_NEEDS_SETUP, EXIT_READY, SETUP_VERSION
 
 
 def _base_dir() -> str:
@@ -80,13 +80,15 @@ def _runtime_status() -> tuple[RuntimeStatus, str]:
     except (OSError, subprocess.TimeoutExpired) as exc:
         return RuntimeStatus.UNVERIFIED, f"Quick dependency check unavailable: {exc}"
 
-    if result.returncode == 0:
+    if result.returncode == EXIT_READY:
         return RuntimeStatus.READY, ""
-    if result.returncode == 1:
+    if result.returncode == EXIT_NEEDS_SETUP:
         return RuntimeStatus.NEEDS_SETUP, "Required dependency versions are missing."
-    return RuntimeStatus.UNVERIFIED, (
-        f"Dependency check exited unexpectedly with code {result.returncode}."
-    )
+    reason = f"Dependency check exited unexpectedly with code {result.returncode}."
+    if result.stderr:
+        # Keep the traceback, including undecodable native output, for diagnosis.
+        reason += "\n" + result.stderr.decode("utf-8", errors="replace").strip()
+    return RuntimeStatus.UNVERIFIED, reason
 
 
 def _log_startup_warning(message: str) -> None:
@@ -157,7 +159,11 @@ def _fatal(msg: str) -> None:
 
 
 def main() -> None:
-    status, reason = (RuntimeStatus.NEEDS_SETUP, "Repair requested by user.") if "--repair" in sys.argv[1:] else _runtime_status()
+    repair = "--repair" in sys.argv[1:]
+    if repair:
+        status, reason = RuntimeStatus.NEEDS_SETUP, "Repair requested by user."
+    else:
+        status, reason = _runtime_status()
     if status is RuntimeStatus.UNVERIFIED:
         _log_startup_warning(reason)
     if status is not RuntimeStatus.NEEDS_SETUP:
@@ -169,7 +175,7 @@ def main() -> None:
     except ImportError as exc:
         _fatal(f"Cannot load setup wizard: {exc}")
     wizard = SetupWizard(
-        base_dir=_base_dir(), on_complete=_launch_app, reason=reason
+        base_dir=_base_dir(), on_complete=_launch_app, reason=reason, repair=repair
     )
     wizard.run()
 
