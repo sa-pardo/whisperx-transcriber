@@ -5,12 +5,13 @@ would otherwise make the application disappear without explaining the failure.
 """
 import os
 import runpy
+import subprocess
 import sys
 import traceback
 from datetime import datetime
 
 
-def _show_error(message: str) -> None:
+def _show_error(message: str) -> bool:
     try:
         import tkinter as tk
         from tkinter import messagebox
@@ -18,11 +19,15 @@ def _show_error(message: str) -> None:
         root = tk.Tk()
         root.withdraw()
         try:
-            messagebox.showerror("WhisperX Transcriber", message)
+            return messagebox.askyesno(
+                "WhisperX Transcriber",
+                message + "\n\nOpen the repair wizard now?",
+            )
         finally:
             root.destroy()
     except Exception:
         print(message, file=sys.stderr)
+    return False
 
 
 def _report_startup_error(exc: Exception) -> None:
@@ -36,11 +41,15 @@ def _report_startup_error(exc: Exception) -> None:
     except OSError:
         detail = "Unable to write the startup error log."
 
-    _show_error(
+    if _show_error(
         f"WhisperX Transcriber could not start.\n\n"
-        f"{type(exc).__name__}: {exc}\n\n{detail}\n\n"
-        "You can rerun the setup wizard to repair missing dependencies."
-    )
+        f"{type(exc).__name__}: {exc}\n\n{detail}"
+    ):
+        exe = os.path.join(base, "WhisperXTranscriber.exe")
+        try:
+            subprocess.Popen([exe, "--repair"])
+        except OSError as launch_error:
+            _show_error(f"Unable to open the repair wizard: {launch_error}")
 
 
 def main() -> int:
