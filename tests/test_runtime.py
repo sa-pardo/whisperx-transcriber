@@ -53,3 +53,39 @@ def test_cuda_torch_index_handles_missing_nvidia_smi(monkeypatch):
 
     monkeypatch.setattr(runtime.subprocess, "run", fake_run)
     assert runtime.cuda_torch_index() is None
+
+
+def test_quick_probe_avoids_importing_torch(monkeypatch):
+    """Even a CUDA check must inspect metadata, not load torch native DLLs."""
+    import builtins
+
+    monkeypatch.setattr(runtime, "_versions_match", lambda versions: True)
+    monkeypatch.setattr(runtime.metadata, "version", lambda name: "2.8.0+cu128")
+    monkeypatch.setattr(runtime.util, "find_spec", lambda name: object())
+
+    real_import = builtins.__import__
+
+    def no_torch_import(name, *args, **kwargs):
+        if name == "torch" or name.startswith("torch."):
+            raise AssertionError("Quick check imported PyTorch")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_torch_import)
+    assert runtime.dependencies_ready(require_cuda=True, quick=True)
+
+
+def test_quick_cuda_check_rejects_cpu_only_wheel(monkeypatch):
+    monkeypatch.setattr(runtime, "_versions_match", lambda versions: True)
+    monkeypatch.setattr(runtime.metadata, "version", lambda name: "2.8.0+cpu")
+    assert not runtime.torch_ready(require_cuda=True, quick=True)
+
+
+def test_quick_flag_selects_metadata_only_check(monkeypatch):
+    calls = []
+    monkeypatch.setattr(runtime.sys, "argv", ["runtime.py", "--quick"])
+    monkeypatch.setattr(
+        runtime, "dependencies_ready",
+        lambda require_cuda, *, quick: calls.append((require_cuda, quick)) or True,
+    )
+    assert runtime.main() == 0
+    assert calls == [(False, True)]
