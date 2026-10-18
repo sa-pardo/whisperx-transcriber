@@ -11,7 +11,10 @@ whisperx, ctranslate2, or any ML package — they download on first run.
 import os
 import sys
 import subprocess
-from core.runtime import SETUP_VERSION, cuda_torch_index
+import shutil
+from datetime import datetime
+from enum import Enum
+from core.runtime import SETUP_VERSION
 
 
 def _base_dir() -> str:
@@ -28,39 +31,72 @@ def _runtime_python() -> str:
     return pythonw if os.path.isfile(pythonw) else python
 
 
-def _runtime_ready() -> bool:
-    """Fast check — look for the flag file and verify ffmpeg is reachable."""
-    py = os.path.join(_base_dir(), "runtime", "Scripts", "python.exe")
+class RuntimeStatus(Enum):
+    READY = "ready"
+    NEEDS_SETUP = "needs_setup"
+    UNVERIFIED = "unverified"
+
+
+def _runtime_status() -> tuple[RuntimeStatus, str]:
+    """Classify the local installation without importing PyTorch on startup.
+
+    The full CUDA/import check runs when the setup wizard installs packages.
+    A slow or failed quick probe is inconclusive, not proof that the
+    installation is broken: try launching rather than reinstalling it.
+    """
+    base = _base_dir()
+    py = os.path.join(base, "runtime", "Scripts", "python.exe")
     if not os.path.isfile(py):
-        return False
-    flag = os.path.join(_base_dir(), "runtime", ".setup_complete")
+        return RuntimeStatus.NEEDS_SETUP, "Local Python runtime is missing."
+
+    flag = os.path.join(base, "runtime", ".setup_complete")
     if not os.path.isfile(flag):
-        return False
+        return RuntimeStatus.NEEDS_SETUP, "Installation completion marker is missing."
     try:
         with open(flag, encoding="utf-8") as fh:
-            if fh.read().strip() != SETUP_VERSION:
-                return False
-        probe = os.path.join(_base_dir(), "core", "runtime.py")
-        cmd = [py, probe]
-        if cuda_torch_index():
-            cmd.append("--cuda")
-        kwargs = dict(capture_output=True, timeout=30)
-        if sys.platform == "win32":
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        if subprocess.run(cmd, **kwargs).returncode != 0:
-            return False
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    # Ensure ffmpeg is available — bundled via imageio-ffmpeg or on system PATH
-    ffmpeg_binaries = os.path.join(_base_dir(), "runtime", "Lib", "site-packages",
-                                   "imageio_ffmpeg", "binaries")
-    if os.path.isdir(ffmpeg_binaries):
-        return True
+            version = fh.read().strip()
+    except OSError as exc:
+        return RuntimeStatus.UNVERIFIED, f"Could not read the setup marker: {exc}"
+    if version != SETUP_VERSION:
+        return RuntimeStatus.NEEDS_SETUP, "Installed runtime needs an update."
+
+    ffmpeg_binaries = os.path.join(
+        base, "runtime", "Lib", "site-packages", "imageio_ffmpeg", "binaries"
+    )
+    if not os.path.isdir(ffmpeg_binaries) and not shutil.which("ffmpeg"):
+        return RuntimeStatus.NEEDS_SETUP, "FFmpeg is missing."
+
+    probe = os.path.join(base, "core", "runtime.py")
+    if not os.path.isfile(probe):
+        return RuntimeStatus.UNVERIFIED, "Dependency check script is missing."
+
+    kwargs = dict(capture_output=True, timeout=12)
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     try:
-        import shutil
-        return bool(shutil.which("ffmpeg"))
-    except Exception:
-        return False
+        # --quick checks installed package metadata only. Do not call
+        # nvidia-smi or import torch during the regular GUI launch.
+        result = subprocess.run([py, probe, "--quick"], **kwargs)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return RuntimeStatus.UNVERIFIED, f"Quick dependency check unavailable: {exc}"
+
+    if result.returncode == 0:
+        return RuntimeStatus.READY, ""
+    if result.returncode == 1:
+        return RuntimeStatus.NEEDS_SETUP, "Required dependency versions are missing."
+    return RuntimeStatus.UNVERIFIED, (
+        f"Dependency check exited unexpectedly with code {result.returncode}."
+    )
+
+
+def _log_startup_warning(message: str) -> None:
+    """Keep the reason for an inconclusive probe without blocking startup."""
+    try:
+        path = os.path.join(_base_dir(), "startup-warning.log")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(f"{datetime.now().astimezone().isoformat()} {message}\n")
+    except OSError:
+        pass  # Logging must never prevent the application from opening.
 
 
 def _launch_app() -> None:
@@ -68,9 +104,13 @@ def _launch_app() -> None:
     base = _base_dir()
     runtime_py = _runtime_python()
     app_script = os.path.join(base, "app.py")
+    bootstrap_script = os.path.join(base, "app_bootstrap.py")
 
     if not os.path.isfile(app_script):
         _fatal(f"app.py not found at:\n{app_script}\n\nReinstall the application.")
+
+    if not os.path.isfile(bootstrap_script):
+        _fatal(f"app_bootstrap.py not found at:\\n{bootstrap_script}\\n\\nReinstall the application.")
 
     if not os.path.isfile(runtime_py):
         _fatal("Runtime Python not found. Run the app again to reinstall the backend.")
@@ -90,12 +130,15 @@ def _launch_app() -> None:
     if os.path.isdir(ffmpeg_bin):
         env["PATH"] = ffmpeg_bin + os.pathsep + env.get("PATH", "")
 
-    subprocess.Popen(
-        [runtime_py, app_script],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.Popen(
+            [runtime_py, bootstrap_script],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        _fatal(f"Unable to launch the application: {exc}")
     sys.exit(0)
 
 
@@ -114,15 +157,21 @@ def _fatal(msg: str) -> None:
 
 
 def main() -> None:
-    if _runtime_ready():
+    status, reason = _runtime_status()
+    if status is RuntimeStatus.UNVERIFIED:
+        _log_startup_warning(reason)
+    if status is not RuntimeStatus.NEEDS_SETUP:
         _launch_app()
-    else:
-        try:
-            from setup_wizard import SetupWizard
-        except ImportError as e:
-            _fatal(f"Cannot load setup wizard: {e}")
-        wizard = SetupWizard(base_dir=_base_dir(), on_complete=_launch_app)
-        wizard.run()
+        return
+
+    try:
+        from setup_wizard import SetupWizard
+    except ImportError as exc:
+        _fatal(f"Cannot load setup wizard: {exc}")
+    wizard = SetupWizard(
+        base_dir=_base_dir(), on_complete=_launch_app, reason=reason
+    )
+    wizard.run()
 
 
 if __name__ == "__main__":
