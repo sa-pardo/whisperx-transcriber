@@ -252,7 +252,6 @@ def test_unrelated_import_warning_is_still_reported(monkeypatch, capsys):
 
     monkeypatch.setattr(runtime, "import_module", fake_import)
 
-    assert runtime.dependencies_ready()
-    output = capsys.readouterr().err
-    assert "other backend warning" in output
-    assert "TorchCodec native audio decoding is unavailable" not in output
+    with pytest.warns(UserWarning, match="other backend warning"):
+        assert runtime.dependencies_ready()
+    assert "TorchCodec native audio decoding is unavailable" not in capsys.readouterr().err

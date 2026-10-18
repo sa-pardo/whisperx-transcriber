@@ -105,8 +105,8 @@ def dependencies_ready(require_cuda=False, *, quick=False) -> bool:
             torchcodec_unavailable = True
         else:
             # Never hide warnings about unrelated dependencies.
-            warnings.showwarning(warning.message, warning.category,
-                                 warning.filename, warning.lineno)
+            warnings.warn_explicit(warning.message, warning.category,
+                                   warning.filename, warning.lineno)
 
     if torchcodec_unavailable:
         print(
