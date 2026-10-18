@@ -4,6 +4,25 @@ All notable changes to WhisperX Transcriber are documented here.
 
 ## [Unreleased]
 
+## [v1.3.3] — 2026-10-18
+
+### Fixed
+- Prevent the first-run wizard from reopening after a slow cold start or idle
+  period. The launcher now checks installed package metadata without importing
+  PyTorch native libraries on every launch.
+- Distinguish missing dependencies from inconclusive startup checks. Timeouts
+  and unexpected probe errors are logged, and the launcher attempts normal
+  startup instead of reinstalling the backend.
+- Log early GUI startup failures and offer an explicit repair path through
+  `WhisperXTranscriber.exe --repair`.
+- Make repair recreate and verify the managed `runtime/` environment,
+  including CPU/GPU and core dependency imports, while keeping downloaded
+  models and user settings.
+
+### Changed
+- Extend Windows regression tests for dependency checks, error reporting,
+  and the repair workflow.
+
 ## [v1.3.2] — 2026-10-13
 
 ### Fixed
