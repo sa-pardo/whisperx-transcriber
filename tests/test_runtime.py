@@ -1,5 +1,6 @@
 """Tests for CUDA driver detection without requiring an NVIDIA GPU."""
 import subprocess
+import warnings
 
 import pytest
 
@@ -165,9 +166,9 @@ def test_full_cuda_probe_checks_build_without_requiring_driver(monkeypatch, cuda
     assert runtime.torch_ready(require_cuda=True) is expected
 
 
-@pytest.mark.parametrize("broken_module", [None, "whisperx", "pyannote.audio", "torchcodec",
+@pytest.mark.parametrize("broken_module", [None, "whisperx", "pyannote.audio",
                                             "customtkinter", "PIL.Image", "imageio_ffmpeg"])
-def test_full_probe_checks_core_imports(monkeypatch, broken_module):
+def test_full_probe_checks_required_imports(monkeypatch, broken_module):
     calls = []
     monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
     monkeypatch.setattr(runtime, "_versions_match", lambda versions: True)
@@ -182,7 +183,92 @@ def test_full_probe_checks_core_imports(monkeypatch, broken_module):
     monkeypatch.setattr(runtime, "import_module", import_package)
     assert runtime.dependencies_ready() is (broken_module is None)
     if broken_module is None:
-        assert calls == ["whisperx", "pyannote.audio", "torchcodec",
-                         "customtkinter", "PIL.Image", "imageio_ffmpeg"]
+        assert calls == ["whisperx", "pyannote.audio", "customtkinter",
+                         "PIL.Image", "imageio_ffmpeg", "torchcodec"]
     else:
         assert broken_module in calls
+        assert "torchcodec" not in calls
+
+
+@pytest.mark.parametrize("codec_error", [
+    ImportError("libtorchcodec module missing"),
+    OSError("avcodec-61.dll not found"),
+    RuntimeError("\nCould not load libtorchcodec.\n[DLL loading traceback]"),
+])
+@pytest.mark.parametrize("require_cuda", [False, True])
+def test_optional_torchcodec_native_failure_logs_warning_and_succeeds(
+        monkeypatch, capsys, codec_error, require_cuda):
+    monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(runtime, "_versions_match", lambda versions: True)
+    monkeypatch.setattr(runtime.util, "find_spec", lambda name: object())
+
+    def import_package(name):
+        if name == "torchcodec":
+            raise codec_error
+        return object()
+
+    monkeypatch.setattr(runtime, "import_module", import_package)
+    monkeypatch.setattr(
+        runtime.sys, "argv", ["runtime.py"] + (["--cuda"] if require_cuda else []),
+    )
+    assert runtime.main() == runtime.EXIT_READY
+    message = capsys.readouterr().err
+    assert "WARNING: TorchCodec native audio decoding is unavailable" in message
+    assert type(codec_error).__name__ in message
+    assert "pre-decoded audio" in message
+    assert "[DLL loading traceback]" not in message
+    assert "Traceback (most recent call last)" not in message
+
+
+@pytest.mark.parametrize("quick", [False, True])
+def test_missing_torchcodec_metadata_remains_a_setup_failure(monkeypatch, quick):
+    monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        runtime, "_versions_match",
+        lambda versions: versions is not runtime.ENGINE_VERSIONS,
+    )
+    monkeypatch.setattr(
+        runtime, "import_module",
+        lambda name: pytest.fail(f"Unexpected import when metadata missing: {name}"),
+    )
+    monkeypatch.setattr(
+        runtime.sys, "argv", ["runtime.py"] + (["--quick"] if quick else []),
+    )
+    assert runtime.main() == runtime.EXIT_NEEDS_SETUP
+
+
+def test_pyannote_codec_warning_is_consolidated_without_hiding_other_warnings(
+        monkeypatch, capsys, recwarn):
+    monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(runtime, "_versions_match", lambda versions: True)
+    monkeypatch.setattr(runtime.util, "find_spec", lambda name: object())
+
+    def import_package(name):
+        if name == "pyannote.audio":
+            warnings.warn_explicit(
+                "\ntorchcodec is not installed correctly so built-in audio decoding "
+                "will fail.\n[verbose DLL traceback]",
+                UserWarning,
+                "pyannote/audio/core/io.py",
+                48,
+                module="pyannote.audio.core.io",
+            )
+            warnings.warn_explicit(
+                "Other pyannote warning",
+                UserWarning,
+                "pyannote/audio/core/io.py",
+                49,
+                module="pyannote.audio.core.io",
+            )
+        if name == "torchcodec":
+            raise RuntimeError("Could not load libtorchcodec")
+        return object()
+
+    monkeypatch.setattr(runtime, "import_module", import_package)
+    assert runtime.dependencies_ready()
+    message = capsys.readouterr().err
+    assert "[verbose DLL traceback]" not in message
+    assert not any("torchcodec is not installed correctly" in str(w.message)
+                   for w in recwarn)
+    assert any("Other pyannote warning" in str(w.message) for w in recwarn)
+    assert message.count("WARNING: TorchCodec native audio decoding is unavailable") == 1

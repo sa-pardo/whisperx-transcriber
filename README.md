@@ -199,6 +199,15 @@ Repair removes and recreates the managed `runtime/` environment and reinstalls
 the backend dependencies (a multi-GB download may be needed). It keeps
 `Models/` and `settings.json`, but close other app instances first.
 
+**TorchCodec / libtorchcodec DLL warning (Windows)** — The portable app uses
+FFmpeg to load audio and passes pre-decoded waveforms to pyannote for speaker
+diarization. TorchCodec stays installed at its pinned version, but a failure
+to load its optional native FFmpeg libraries produces a setup warning rather
+than blocking installation. Check that transcription and diarization actually
+work on your machine. Direct TorchCodec decoding still requires the matching
+shared FFmpeg DLLs; the bundled `imageio-ffmpeg` executable alone does
+not necessarily provide them.
+
 **"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH". Re-run the app.
 
 **Setup fails mid-download** — Click **Retry**. The wizard resumes and skips already-installed packages.
