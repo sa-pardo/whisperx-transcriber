@@ -32,3 +32,19 @@ def test_bootstrap_logs_and_displays_startup_error(monkeypatch, tmp_path):
     assert "ImportError: missing runtime dependency" in log
     assert len(messages) == 1
     assert "startup-error.log" in messages[0]
+
+
+def test_startup_error_can_request_repair(monkeypatch, tmp_path):
+    monkeypatch.setattr(app_bootstrap, "__file__", str(tmp_path / "app_bootstrap.py"))
+    monkeypatch.setattr(
+        app_bootstrap.runpy, "run_path",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("failure")),
+    )
+    monkeypatch.setattr(app_bootstrap, "_show_error", lambda message: True)
+    commands = []
+    monkeypatch.setattr(
+        app_bootstrap.subprocess, "Popen", lambda args: commands.append(args)
+    )
+
+    assert app_bootstrap.main() == 1
+    assert commands == [[str(tmp_path / "WhisperXTranscriber.exe"), "--repair"]]
