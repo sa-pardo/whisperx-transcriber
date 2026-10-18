@@ -4,6 +4,20 @@ All notable changes to WhisperX Transcriber are documented here.
 
 ## [Unreleased]
 
+## [v1.3.4] — 2026-10-18
+
+### Fixed
+- Allow Windows portable setup and repair to complete when TorchCodec is installed
+  at the required version but its optional native FFmpeg libraries cannot load.
+- Keep strict dependency checks for PyTorch, WhisperX, pyannote and other required
+  modules; report a concise, non-blocking warning for TorchCodec decoding.
+- Avoid repeating pyannote's verbose TorchCodec DLL traceback during setup while
+  keeping other warnings visible.
+
+### Changed
+- Add Windows regression tests for broken TorchCodec native imports, required
+  dependency failures and successful setup completion.
+
 ## [v1.3.3] — 2026-10-18
 
 ### Fixed
