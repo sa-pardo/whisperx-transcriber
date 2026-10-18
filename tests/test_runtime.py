@@ -238,7 +238,7 @@ def test_missing_torchcodec_metadata_remains_a_setup_failure(monkeypatch, quick)
 
 
 def test_pyannote_codec_warning_is_consolidated_without_hiding_other_warnings(
-        monkeypatch, capsys):
+        monkeypatch, capsys, recwarn):
     monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
     monkeypatch.setattr(runtime, "_versions_match", lambda versions: True)
     monkeypatch.setattr(runtime.util, "find_spec", lambda name: object())
@@ -268,5 +268,7 @@ def test_pyannote_codec_warning_is_consolidated_without_hiding_other_warnings(
     assert runtime.dependencies_ready()
     message = capsys.readouterr().err
     assert "[verbose DLL traceback]" not in message
-    assert "Other pyannote warning" in message
+    assert not any("torchcodec is not installed correctly" in str(w.message)
+                   for w in recwarn)
+    assert any("Other pyannote warning" in str(w.message) for w in recwarn)
     assert message.count("WARNING: TorchCodec native audio decoding is unavailable") == 1
