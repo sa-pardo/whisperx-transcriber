@@ -130,7 +130,8 @@ def _find_python_fresh() -> str | None:
 # ── Wizard ────────────────────────────────────────────────────────────────────
 
 class SetupWizard:
-    def __init__(self, base_dir: str, on_complete):
+    def __init__(self, base_dir: str, on_complete, reason: str | None = None):
+        self.reason = reason
         self.base_dir    = base_dir
         self.on_complete = on_complete
         self.runtime_dir = os.path.join(base_dir, "runtime")
@@ -165,7 +166,8 @@ class SetupWizard:
         hdr.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(hdr, text="WhisperX Transcriber", font=_F(20, "bold"),
                      text_color="#ffffff").grid(row=0, column=0, pady=(20, 2))
-        ctk.CTkLabel(hdr, text="First-time Setup", font=_F(12),
+        ctk.CTkLabel(hdr, text="Setup / Repair" if self.reason else "First-time Setup",
+                     font=_F(12),
                      text_color="#666666").grid(row=1, column=0, pady=(0, 16))
 
         # Content (swappable)
@@ -239,6 +241,12 @@ class SetupWizard:
                          text="Python 3.13 will be downloaded and installed automatically.",
                          font=_F(10), text_color=_HINT,
                          ).grid(row=1, column=0, padx=16, pady=(0, 10), sticky="w")
+
+        if self.reason:
+            ctk.CTkLabel(
+                b, text=f"Setup required: {self.reason}", font=_F(11),
+                text_color="#ffaa00", wraplength=500, justify="left",
+            ).grid(row=4, column=0, sticky="w", pady=(0, 4))
 
         # Footer
         if self.python_path:
