@@ -110,7 +110,7 @@ def _launch_app() -> None:
         _fatal(f"app.py not found at:\n{app_script}\n\nReinstall the application.")
 
     if not os.path.isfile(bootstrap_script):
-        _fatal(f"app_bootstrap.py not found at:\\n{bootstrap_script}\\n\\nReinstall the application.")
+        _fatal(f"app_bootstrap.py not found at:\n{bootstrap_script}\n\nReinstall the application.")
 
     if not os.path.isfile(runtime_py):
         _fatal("Runtime Python not found. Run the app again to reinstall the backend.")
@@ -157,7 +157,7 @@ def _fatal(msg: str) -> None:
 
 
 def main() -> None:
-    status, reason = _runtime_status()
+    status, reason = (RuntimeStatus.NEEDS_SETUP, "Repair requested by user.") if "--repair" in sys.argv[1:] else _runtime_status()
     if status is RuntimeStatus.UNVERIFIED:
         _log_startup_warning(reason)
     if status is not RuntimeStatus.NEEDS_SETUP:
