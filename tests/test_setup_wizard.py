@@ -202,3 +202,18 @@ def test_constructor_keeps_repair_explicit_until_user_starts(setup_module, monke
     wizard = setup_module.SetupWizard(str(tmp_path), lambda: None, repair=True)
     assert wizard.repair is True
     assert sentinel.exists()
+
+
+def test_optional_torchcodec_warning_does_not_block_setup(installation):
+    i = installation
+    i.state.final_error = (
+        "WARNING: TorchCodec native audio decoding is unavailable "
+        "(RuntimeError: Could not load libtorchcodec)."
+    )
+
+    i.wizard._run_install()
+
+    assert i.marker.read_text() == SETUP_VERSION
+    assert i.statuses[-1] == "Setup complete!"
+    assert any("TorchCodec native audio decoding" in line for line in i.logs)
+    assert i.corrupt.exists()  # Normal setup reuses a matching runtime.

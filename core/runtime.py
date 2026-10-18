@@ -5,6 +5,7 @@ import subprocess
 import sys
 import re
 import traceback
+import warnings
 
 
 # Exit 1 is reserved for probe failures (including unhandled Python errors),
@@ -71,6 +72,25 @@ def torch_ready(require_cuda=False, *, quick=False) -> bool:
         return False
 
 
+def _warn_if_torchcodec_unavailable() -> None:
+    """Native TorchCodec decoding is optional for our pre-decoded audio pipeline."""
+    try:
+        import_module("torchcodec")
+    except Exception as exc:
+        # Missing shared FFmpeg DLLs make TorchCodec raise RuntimeError even
+        # when the installed wheel version is correct. The app decodes with
+        # WhisperX/FFmpeg and hands an in-memory waveform to pyannote.
+        detail = next((line.strip() for line in str(exc).splitlines()
+                       if line.strip()), type(exc).__name__)
+        print(
+            "WARNING: TorchCodec native audio decoding is unavailable "
+            f"({type(exc).__name__}: {detail}). "
+            "WhisperX uses pre-decoded audio for diarization; "
+            "verify diarization if you rely on it.",
+            file=sys.stderr,
+        )
+
+
 def dependencies_ready(require_cuda=False, *, quick=False) -> bool:
     if not (torch_ready(require_cuda, quick=quick) and _versions_match(ENGINE_VERSIONS)
             and all(util.find_spec(name) is not None
@@ -79,14 +99,25 @@ def dependencies_ready(require_cuda=False, *, quick=False) -> bool:
     if quick:
         return True
     try:
-        # Installation/repair smoke test: import without downloading AI models
-        # or creating a GUI. Import PIL.Image, not just the package stub.
-        for name in ("whisperx", "pyannote.audio", "torchcodec",
-                     "customtkinter", "PIL.Image", "imageio_ffmpeg"):
-            import_module(name)
+        # Import critical packages, but suppress pyannote's verbose native
+        # TorchCodec warning: we report one actionable message below instead.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"(?s)\s*torchcodec is not installed correctly.*",
+                category=UserWarning,
+                module=r"pyannote\.audio\.core\.io",
+            )
+            for name in ("whisperx", "pyannote.audio",
+                         "customtkinter", "PIL.Image", "imageio_ffmpeg"):
+                import_module(name)
     except Exception:
         traceback.print_exc()
         return False
+
+    # Still require the pinned TorchCodec package metadata above, but do not
+    # fail the installation because its optional FFmpeg DLLs cannot be loaded.
+    _warn_if_torchcodec_unavailable()
     return True
 
 
