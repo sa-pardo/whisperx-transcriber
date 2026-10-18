@@ -165,7 +165,7 @@ def test_full_cuda_probe_checks_build_without_requiring_driver(monkeypatch, cuda
     assert runtime.torch_ready(require_cuda=True) is expected
 
 
-@pytest.mark.parametrize("broken_module", [None, "whisperx", "pyannote.audio", "torchcodec",
+@pytest.mark.parametrize("broken_module", [None, "whisperx", "pyannote.audio",
                                             "customtkinter", "PIL.Image", "imageio_ffmpeg"])
 def test_full_probe_checks_core_imports(monkeypatch, broken_module):
     calls = []
@@ -182,7 +182,77 @@ def test_full_probe_checks_core_imports(monkeypatch, broken_module):
     monkeypatch.setattr(runtime, "import_module", import_package)
     assert runtime.dependencies_ready() is (broken_module is None)
     if broken_module is None:
-        assert calls == ["whisperx", "pyannote.audio", "torchcodec",
-                         "customtkinter", "PIL.Image", "imageio_ffmpeg"]
+        assert calls == ["whisperx", "pyannote.audio", "customtkinter",
+                         "PIL.Image", "imageio_ffmpeg"]
     else:
         assert broken_module in calls
+
+
+@pytest.mark.parametrize("emitter", ["whisperx", "pyannote.audio"])
+def test_native_torchcodec_warning_is_nonblocking(monkeypatch, capsys, emitter):
+    """Pyannote's broken native decoder must not prevent setup on Windows."""
+    import warnings
+
+    monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(runtime, "_versions_match", lambda _versions: True)
+    monkeypatch.setattr(runtime.util, "find_spec", lambda _name: object())
+    monkeypatch.setattr(runtime.sys, "argv", ["runtime.py"])
+    calls = []
+
+    def fake_import(name):
+        calls.append(name)
+        if name == emitter:
+            warnings.warn(
+                "\ntorchcodec is not installed correctly so built-in audio decoding will fail. "
+                "Could not load libtorchcodec_core7.dll (or dependencies).",
+                UserWarning,
+            )
+        return object()
+
+    monkeypatch.setattr(runtime, "import_module", fake_import)
+
+    assert runtime.main() == runtime.EXIT_READY
+    assert "torchcodec" not in calls  # Do not separately load its native DLLs.
+    output = capsys.readouterr().err
+    assert output.count("WARNING: TorchCodec native audio decoding is unavailable") == 1
+    assert "predecoded waveforms" in output
+    assert "libtorchcodec_core7.dll" not in output  # Avoid noisy repeated tracebacks.
+
+
+@pytest.mark.parametrize("installed", [None, "0.6.0"])
+def test_missing_or_incompatible_torchcodec_metadata_still_requires_setup(
+        monkeypatch, installed):
+    """Only the native decoder is optional; the pinned distribution is not."""
+    def installed_version(name):
+        if name == "torchcodec":
+            if installed is None:
+                raise runtime.metadata.PackageNotFoundError(name)
+            return installed
+        return runtime.ENGINE_VERSIONS[name]
+
+    monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(runtime.metadata, "version", installed_version)
+    monkeypatch.setattr(runtime.util, "find_spec", lambda _name: object())
+    monkeypatch.setattr(runtime.sys, "argv", ["runtime.py", "--quick"])
+
+    assert runtime.main() == runtime.EXIT_NEEDS_SETUP
+
+
+def test_unrelated_import_warning_is_still_reported(monkeypatch, capsys):
+    import warnings
+
+    monkeypatch.setattr(runtime, "torch_ready", lambda *args, **kwargs: True)
+    monkeypatch.setattr(runtime, "_versions_match", lambda _versions: True)
+    monkeypatch.setattr(runtime.util, "find_spec", lambda _name: object())
+
+    def fake_import(name):
+        if name == "whisperx":
+            warnings.warn("other backend warning", UserWarning)
+        return object()
+
+    monkeypatch.setattr(runtime, "import_module", fake_import)
+
+    assert runtime.dependencies_ready()
+    output = capsys.readouterr().err
+    assert "other backend warning" in output
+    assert "TorchCodec native audio decoding is unavailable" not in output

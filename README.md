@@ -199,6 +199,14 @@ Repair removes and recreates the managed `runtime/` environment and reinstalls
 the backend dependencies (a multi-GB download may be needed). It keeps
 `Models/` and `settings.json`, but close other app instances first.
 
+**TorchCodec warning during setup** — On some Windows systems Pyannote cannot
+load TorchCodec's native decoder because its shared FFmpeg libraries are
+unavailable. The installer retains and validates the pinned TorchCodec package,
+but reports this native-decoder problem as a warning: WhisperX Transcriber
+decodes files with FFmpeg and supplies preloaded waveforms to Pyannote. Direct
+file-based decoding through Pyannote still requires working TorchCodec native
+libraries. Validate transcription and diarization after installation.
+
 **"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH". Re-run the app.
 
 **Setup fails mid-download** — Click **Retry**. The wizard resumes and skips already-installed packages.

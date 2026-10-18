@@ -5,6 +5,7 @@ import subprocess
 import sys
 import re
 import traceback
+import warnings
 
 
 # Exit 1 is reserved for probe failures (including unhandled Python errors),
@@ -79,16 +80,42 @@ def dependencies_ready(require_cuda=False, *, quick=False) -> bool:
     if quick:
         return True
     try:
-        # Installation/repair smoke test: import without downloading AI models
-        # or creating a GUI. Import PIL.Image, not just the package stub.
-        for name in ("whisperx", "pyannote.audio", "torchcodec",
-                     "customtkinter", "PIL.Image", "imageio_ffmpeg"):
-            import_module(name)
+        # Only imports used by this application's pipeline are mandatory.
+        # WhisperX decodes files with FFmpeg and passes preloaded waveforms to
+        # Pyannote. Its native TorchCodec file decoder is not needed here.
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.filterwarnings(
+                "always",
+                message=r"\s*torchcodec is not installed correctly",
+                category=UserWarning,
+            )
+            for name in ("whisperx", "pyannote.audio", "customtkinter",
+                         "PIL.Image", "imageio_ffmpeg"):
+                import_module(name)
     except Exception:
         traceback.print_exc()
         return False
-    return True
 
+    torchcodec_unavailable = False
+    for warning in captured:
+        if (issubclass(warning.category, UserWarning)
+                and str(warning.message).strip().lower().startswith(
+                    "torchcodec is not installed correctly"
+                )):
+            torchcodec_unavailable = True
+        else:
+            # Never hide warnings about unrelated dependencies.
+            warnings.showwarning(warning.message, warning.category,
+                                 warning.filename, warning.lineno)
+
+    if torchcodec_unavailable:
+        print(
+            "WARNING: TorchCodec native audio decoding is unavailable. "
+            "Pyannote file-based decoding may fail, but WhisperX Transcriber "
+            "uses predecoded waveforms; continuing installation.",
+            file=sys.stderr,
+        )
+    return True
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

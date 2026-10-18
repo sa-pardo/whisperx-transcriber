@@ -202,3 +202,23 @@ def test_constructor_keeps_repair_explicit_until_user_starts(setup_module, monke
     wizard = setup_module.SetupWizard(str(tmp_path), lambda: None, repair=True)
     assert wizard.repair is True
     assert sentinel.exists()
+
+
+def test_optional_decoder_warning_is_visible_without_failing_probe(
+        setup_module, monkeypatch):
+    wizard = setup_module.SetupWizard.__new__(setup_module.SetupWizard)
+    messages = []
+    wizard._log = messages.append
+
+    def run(command, **kwargs):
+        return subprocess.CompletedProcess(
+            command, 0, stdout="",
+            stderr="WARNING: TorchCodec native audio decoding is unavailable. "
+                   "Continuing installation.",
+        )
+
+    monkeypatch.setattr(setup_module.subprocess, "run", run)
+
+    assert wizard._probe_runtime(["python", "runtime.py"]) is True
+    assert len(messages) == 1
+    assert "TorchCodec native audio decoding is unavailable" in messages[0]
