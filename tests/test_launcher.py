@@ -166,3 +166,31 @@ def test_missing_marker_triggers_installation(monkeypatch, tmp_path):
     marker.unlink()
     status, _ = launcher._runtime_status()
     assert status is launcher.RuntimeStatus.NEEDS_SETUP
+
+
+def test_explicit_repair_opens_wizard_without_probe(monkeypatch, tmp_path):
+    """A startup error can send the user directly into repair mode."""
+    import sys
+    import types
+
+    monkeypatch.setattr(launcher.sys, "argv", ["WhisperXTranscriber.exe", "--repair"])
+    monkeypatch.setattr(
+        launcher, "_runtime_status",
+        lambda: pytest.fail("Explicit repair must skip startup validation"),
+    )
+    monkeypatch.setattr(launcher, "_base_dir", lambda: str(tmp_path))
+    wizard_arguments = []
+
+    class FakeWizard:
+        def __init__(self, **kwargs):
+            wizard_arguments.append(kwargs)
+
+        def run(self):
+            wizard_arguments.append("run")
+
+    monkeypatch.setitem(sys.modules, "setup_wizard", types.SimpleNamespace(SetupWizard=FakeWizard))
+    launcher.main()
+
+    assert wizard_arguments[0]["reason"] == "Repair requested by user."
+    assert wizard_arguments[0]["base_dir"] == str(tmp_path)
+    assert wizard_arguments[1] == "run"
