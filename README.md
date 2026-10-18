@@ -195,7 +195,9 @@ beside the executable.
 exception and saves a traceback to `startup-error.log` beside the executable.
 Choose **Yes** to open the repair wizard, or run
 `WhisperXTranscriber.exe --repair` from a terminal to repair manually.
-Only use repair when needed; it may reinstall dependencies.
+Repair removes and recreates the managed `runtime/` environment and reinstalls
+the backend dependencies (a multi-GB download may be needed). It keeps
+`Models/` and `settings.json`, but close other app instances first.
 
 **"Python not found"** — Install [Python 3.10+](https://www.python.org/downloads/) and tick "Add Python to PATH". Re-run the app.
 
